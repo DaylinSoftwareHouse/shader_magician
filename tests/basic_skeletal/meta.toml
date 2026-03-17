@@ -1,0 +1,4 @@
+import_rewrites = {
+    vertex = "skeletal",
+    fragment = "grouped"
+}
