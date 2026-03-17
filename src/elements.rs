@@ -3,6 +3,8 @@ use std::collections::{HashMap, HashSet};
 
 use crate::*;
 
+pub const PROCESSOR_ATTRIBUTES: &[&str] = &["public"];
+
 /// Storage object for all needed data for a pre-compiled shader.
 #[derive(Default, Debug, Clone)]
 pub struct ShaderFile {
@@ -113,13 +115,17 @@ impl ShaderElement {
 
     /// Converts a single `ShaderElement` with the given replacements for # marked defines
     /// into a single shader string.
-    pub fn single_to_wgsl(&self, replacements: &HashMap<String, String>) -> String {
+    pub fn single_to_wgsl(&self, replacements: &HashMap<String, String>, only_public: bool) -> String {
         match self {
             ShaderElement::Struct { attrs, name, params } => {
                 let mut output = String::new();
+
+                if only_public && !attrs.iter().any(|attr| attr.name == "public") { return String::new(); }
                 
                 // Add attributes
                 for attr in attrs {
+                    if PROCESSOR_ATTRIBUTES.contains(&attr.name.as_str()) { continue }
+
                     if attr.content.is_empty() {
                         output.push_str(&format!("@{} ", attr.name));
                     } else {
@@ -151,9 +157,13 @@ impl ShaderElement {
             
             ShaderElement::Function { attrs, name, params, block, ret_ty, preprocessor_instructions: _ } => {
                 let mut output = String::new();
+
+                if only_public && !attrs.iter().any(|attr| attr.name == "public") { return String::new(); }
                 
                 // Add attributes
                 for attr in attrs {
+                    if PROCESSOR_ATTRIBUTES.contains(&attr.name.as_str()) { continue }
+
                     if attr.content.is_empty() {
                         output.push_str(&format!("@{}\n", attr.name));
                     } else {
@@ -204,9 +214,13 @@ impl ShaderElement {
             
             ShaderElement::Global { attrs, declared_as, name, ty } => {
                 let mut output = String::new();
+
+                if only_public && !attrs.iter().any(|attr| attr.name == "public") { return String::new(); }
                 
-                // Add attributes on the same line for globals
+                // Add attributes
                 for attr in attrs {
+                    if PROCESSOR_ATTRIBUTES.contains(&attr.name.as_str()) { continue }
+                    
                     if attr.content.is_empty() {
                         output.push_str(&format!("@{} ", attr.name));
                     } else {
@@ -242,11 +256,11 @@ impl ShaderElement {
     
     /// Converts a multiple `ShaderElement` with the given replacements for # marked defines
     /// into a single shader string.
-    pub fn to_wgsl(elements: &[ShaderElement], replacements: &HashMap<String, String>) -> String {
+    pub fn to_wgsl(elements: &[ShaderElement], replacements: &HashMap<String, String>, only_public: bool) -> String {
         let mut output = String::new();
         
         for (i, element) in elements.iter().enumerate() {
-            output.push_str(&element.single_to_wgsl(replacements));
+            output.push_str(&element.single_to_wgsl(replacements, only_public));
             
             // Add extra newline between elements for readability
             if i < elements.len() - 1 {
@@ -283,7 +297,7 @@ mod tests {
             _ => panic!("Expected struct")
         }
 
-        let wgsl = result.single_to_wgsl(&HashMap::new());
+        let wgsl = result.single_to_wgsl(&HashMap::new(), false);
         println!("WGSL: {:?}", wgsl)
     }
     
@@ -370,7 +384,7 @@ fn test() {
         replacements.insert("#{def_value}".to_string(), "42".to_string());
         
         let result = ShaderElement::parse(src).unwrap();
-        let wgsl = ShaderElement::to_wgsl(&result.elements, &replacements);
+        let wgsl = ShaderElement::to_wgsl(&result.elements, &replacements, false);
         
         assert!(wgsl.contains("my_constant"));
         assert!(wgsl.contains("= 42;"));

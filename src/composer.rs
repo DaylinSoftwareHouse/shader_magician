@@ -12,6 +12,11 @@ pub struct ShaderComposer {
     compile_cache: HashMap<u64, String>
 }
 
+struct ImportInstruction {
+    filename: String,
+    only_public: bool
+}
+
 impl ShaderComposer {
     /// Creates a new `ShaderComposer`.
     pub fn new() -> Self { Self::default() }
@@ -65,31 +70,31 @@ impl ShaderComposer {
                 let replacements = defs.drain(..).collect::<HashMap<_, _>>();
 
                 // create initial import list ot compile
-                let mut imported = HashSet::new();
-                let mut to_import = LinkedList::new();
+                let mut imported = HashSet::<String>::new();
+                let mut to_import = LinkedList::<ImportInstruction>::new();
                 imported.insert(shader.clone());
-                to_import.push_front(shader.clone());
+                to_import.push_front(ImportInstruction { filename: shader.clone(), only_public: false });
 
                 // load all imports
                 while let Some(mut import) = to_import.pop_front() {
-                    if let Some(new_import) = import_rewrites.remove(&import) {
-                        import = new_import;
+                    if let Some(new_import) = import_rewrites.remove(&import.filename) {
+                        import.filename = new_import;
                     }
 
                     // get file or throw error
-                    let Some(file) = self.files.get(&import) else {
-                        panic!("Unknown import {import:?}")
+                    let Some(file) = self.files.get(&import.filename) else {
+                        panic!("Unknown import {:?}", import.filename)
                     };
 
                     // save next imports
                     for import in &file.imports {
                         if imported.contains(import) { continue }
                         imported.insert(import.clone());
-                        to_import.push_back(import.clone());
+                        to_import.push_back(ImportInstruction { filename: import.clone(), only_public: true });
                     }
 
                     // convert to wgsl and save to output
-                    output.insert_str(0, &ShaderElement::to_wgsl(&file.elements, &replacements));
+                    output.insert_str(0, &ShaderElement::to_wgsl(&file.elements, &replacements, import.only_public));
                 }
 
                 output
