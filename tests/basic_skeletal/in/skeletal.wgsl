@@ -30,6 +30,7 @@ struct VertexOutput {
 @group(3) @binding(1) var<uniform> nodes: array<mat4x4<f32>, 32u>;
 @group(0) @binding(0) var<uniform> camera_vp: mat4x4<f32>;
 
+@main
 fn vs_main(
     model: VertexInput,
     instance: InstanceInput

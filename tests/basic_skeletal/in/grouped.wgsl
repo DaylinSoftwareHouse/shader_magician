@@ -1,3 +1,4 @@
+#import textures
 #import vertex
 
 struct Material {
@@ -7,10 +8,8 @@ struct Material {
 
 @group(1) @binding(0) var<uniform> materials: array<Material, 256>;
 
-@group(2) @binding(0) var textures: binding_array<texture_2d<f32>>;
-@group(2) @binding(1) var texture_sampler: sampler;
-
+@main
 fn fs_main(in: VertexOutput) -> vec4<f32> {
     let material = materials[in.mat_id];
-    return textureSample(textures[material.texture_id], texture_sampler, in.uvs) * in.color;
+    return texture_sample(material.texture_id, in.uvs) * in.color;
 }

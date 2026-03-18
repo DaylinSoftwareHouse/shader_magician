@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::*;
 
-pub const PROCESSOR_ATTRIBUTES: &[&str] = &["public"];
+pub const PROCESSOR_ATTRIBUTES: &[&str] = &["main", "public"];
 
 /// Storage object for all needed data for a pre-compiled shader.
 #[derive(Default, Debug, Clone)]
@@ -220,7 +220,7 @@ impl ShaderElement {
                 // Add attributes
                 for attr in attrs {
                     if PROCESSOR_ATTRIBUTES.contains(&attr.name.as_str()) { continue }
-                    
+
                     if attr.content.is_empty() {
                         output.push_str(&format!("@{} ", attr.name));
                     } else {

@@ -1,5 +1,6 @@
 [x] Create examples and test cases for existing functionality to produce combined final shaders
 [x] Introduce @public notations
 [x] Allow for production of split final fragment and vertex shaders
+[x] Shader modifiers
 [ ] Better conditional compilation support
 [ ] Check rust features for conditional compilation
