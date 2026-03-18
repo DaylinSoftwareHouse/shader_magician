@@ -72,6 +72,7 @@ impl ShaderComposer {
         let mut hasher = AHasher::default();
         shader.hash(&mut hasher);
         defs.hash(&mut hasher);
+        modifiers.hash(&mut hasher);
         let cache_key = hasher.finish();
 
         // pull from cache if exists
