@@ -12,6 +12,7 @@ pub struct ShaderComposer {
     compile_cache: HashMap<u64, String>
 }
 
+#[derive(Hash)]
 pub struct BuildInstructions<'a> {
     pub main_attribute: &'a str,
     pub main_fn_name: &'a str,
@@ -73,6 +74,7 @@ impl ShaderComposer {
         shader.hash(&mut hasher);
         defs.hash(&mut hasher);
         modifiers.hash(&mut hasher);
+        instructions.hash(&mut hasher);
         let cache_key = hasher.finish();
 
         // pull from cache if exists
