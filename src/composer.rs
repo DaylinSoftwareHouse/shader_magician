@@ -4,6 +4,13 @@ use ahash::AHasher;
 
 use crate::{Attr, Param, ShaderElement, ShaderFile};
 
+pub const DEFAULT_BUILD_INSTRUCTION: &'static BuildInstructions<'static> = &BuildInstructions {
+    main_attribute: "@main",
+    main_fn_name: "main",
+    input_types: &["f32"],
+    output_type: "f32"
+};
+
 /// Shader composer that serves as a central storage
 /// to store shader files and compilated shaders.
 #[derive(Default, Debug, Clone)]
@@ -12,12 +19,61 @@ pub struct ShaderComposer {
     compile_cache: HashMap<u64, String>
 }
 
-#[derive(Hash)]
+/// Instructions meant for whole groups of shaders like vertex or
+/// fragment shaders.  This tells the shader how to build the final
+/// main functions for a shader type.
+/// 
+/// Parameters:
+/// * main_attribute: The attribute to apply to the main function to
+///     be generated like "@vertex" or "@fragment".
+/// * main_fn_name: The reserved name for the main function like "fs_final_main".
+/// * input_types: The list of types that the main function should
+///     take and be given to the base shader and each modifiers main 
+///     functions as arguments.
+/// * output_type: The final output type of the generated main function.
+#[derive(Default, Hash)]
 pub struct BuildInstructions<'a> {
     pub main_attribute: &'a str,
     pub main_fn_name: &'a str,
     pub input_types: &'a [&'a str],
     pub output_type: &'a str
+}
+
+/// Instructions meant for each individual compilation.  This tells
+/// the composer what shaders to compose into a single shader source
+/// code.
+/// 
+/// Parameters:
+/// * shader: The name of the shader that is the "base" shader of this shader.
+/// * modifiers: The modifiers to apply to the output of the "base" shader.
+/// * import_rewrites: The import names to rewrite like vertex to the actual vertex 
+///     shaders name.
+/// * defs: The key value pairs of all definitions that may be applied to this file.
+/// * prefix: A list of `ShaderElement`s that will be applied at the start of this file.  
+///     This is useful to apply things like framebuffer output structs to the start of 
+///     the file without the shader needing to define them.
+/// * instructions: The build instructions that apply to this instruction.
+#[derive(Clone, Copy, Hash)]
+pub struct CompilationInstructions<'a> {
+    pub shader: &'a str,
+    pub modifiers: &'a [String],
+    pub import_rewrites: &'a [(String, String)],
+    pub defs: &'a [(String, String)],
+    pub prefix: &'a [ShaderElement],
+    pub instructions: &'a BuildInstructions<'a>
+}
+
+impl <'a> Default for CompilationInstructions<'a> {
+    fn default() -> Self {
+        Self {
+            shader: "",
+            modifiers: &[],
+            import_rewrites: &[],
+            defs: &[],
+            prefix: &[],
+            instructions: DEFAULT_BUILD_INSTRUCTION
+        }
+    }
 }
 
 struct ImportInstruction {
@@ -57,23 +113,17 @@ impl ShaderComposer {
     /// Compiles a shader with the given definitions into a single shader string.
     pub fn compile<'a>(
         &mut self,
-        shader: impl Into<String>,
-        modifiers: impl Into<Vec<String>>,
-        import_rewrites: impl Into<HashMap<String, String>>,
-        defs: impl Into<Vec<(String, String)>>,
-        instructions: BuildInstructions
+        instructions: CompilationInstructions
     ) -> &String {
         // complete intos
-        let shader = shader.into();
-        let mut import_rewrites = import_rewrites.into();
-        let mut defs = defs.into();
-        let modifiers = modifiers.into();
+        let shader = instructions.shader;
+        let mut import_rewrites = instructions.import_rewrites.iter().cloned().collect::<HashMap<_, _>>();
+        let defs = instructions.defs;
+        let modifiers = instructions.modifiers;
+        let build_instuctions = instructions.instructions;
 
         // hash key
         let mut hasher = AHasher::default();
-        shader.hash(&mut hasher);
-        defs.hash(&mut hasher);
-        modifiers.hash(&mut hasher);
         instructions.hash(&mut hasher);
         let cache_key = hasher.finish();
 
@@ -83,18 +133,24 @@ impl ShaderComposer {
             .or_insert_with(|| {
                 // setup output and replacements
                 let mut output = String::new();
-                let replacements = defs.drain(..).collect::<HashMap<_, _>>();
+                let replacements = defs.iter().cloned().collect::<HashMap<_, _>>();
+
+                // add prefix to the front of the shader if necessary
+                if !instructions.prefix.is_empty() {
+                    let prefix = ShaderElement::to_wgsl(&instructions.prefix, &replacements, false);
+                    output.push_str(&prefix);
+                }
 
                 // create initial import list ot compile
                 let mut imported = HashSet::<String>::new();
                 let mut to_import = LinkedList::<ImportInstruction>::new();
-                imported.insert(shader.clone());
-                to_import.push_front(ImportInstruction { filename: shader.clone(), is_main: true, is_mod: false, only_public: false });
+                imported.insert(shader.to_string());
+                to_import.push_front(ImportInstruction { filename: shader.to_string(), is_main: true, is_mod: false, only_public: false });
 
                 // add mods to import list
                 for modifier in modifiers {
                     imported.insert(modifier.clone());
-                    to_import.push_back(ImportInstruction { filename: modifier, is_main: false, is_mod: true, only_public: false });
+                    to_import.push_back(ImportInstruction { filename: modifier.clone(), is_main: false, is_mod: true, only_public: false });
                 }
 
                 let mut main_function = Option::<String>::None;
@@ -145,17 +201,17 @@ impl ShaderComposer {
                 }
 
                 // compute parameter names
-                let params = (0 .. instructions.input_types.len())
+                let params = (0 .. build_instuctions.input_types.len())
                     .map(|idx| format!("v{}", idx))
                     .collect::<Vec<_>>()
                     .join(", ");
 
                 // compute typed parameters
-                let params_typed = (0 .. instructions.input_types.len())
+                let params_typed = (0 .. build_instuctions.input_types.len())
                     .map(|idx| Param {
                         attrs: vec![],
                         name: format!("v{}", idx),
-                        ty: instructions.input_types[idx].to_string()
+                        ty: build_instuctions.input_types[idx].to_string()
                     })
                     .collect::<Vec<_>>();
 
@@ -170,10 +226,10 @@ impl ShaderComposer {
 
                 // build main function
                 let main_function = ShaderElement::Function { 
-                    attrs: vec![Attr { name: instructions.main_attribute.to_string(), content: String::new() }], 
-                    name: instructions.main_fn_name.to_string(), 
+                    attrs: vec![Attr { name: build_instuctions.main_attribute.to_string(), content: String::new() }], 
+                    name: build_instuctions.main_fn_name.to_string(), 
                     params: params_typed, 
-                    ret_ty: Some(instructions.output_type.to_string()), 
+                    ret_ty: Some(build_instuctions.output_type.to_string()), 
                     block: mfc, 
                     preprocessor_instructions: vec![] 
                 };

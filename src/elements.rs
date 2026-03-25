@@ -39,7 +39,7 @@ impl ShaderFile {
 
 /// Container object for an attribute in a shader.
 /// Example: "@binding(0)"
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Attr {
     pub name: String,
     pub content: String
@@ -47,7 +47,7 @@ pub struct Attr {
 
 /// Container object for a parameter in a shader.
 /// Example: "test: array<u32, 32u>"
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Param {
     pub attrs: Vec<Attr>,
     pub name: String,
@@ -58,7 +58,7 @@ pub struct Param {
 /// Struct - Wgsl struct
 /// Function - Wgsl function
 /// Global - Global variable
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ShaderElement {
     Struct {
         attrs: Vec<Attr>,
@@ -84,6 +84,7 @@ pub enum ShaderElement {
     }
 }
 
+/// All errors that could come from the shader pre-processor during parsing.
 #[derive(Debug)]
 pub enum ShaderPreProcessorError {
     ParseError(String),

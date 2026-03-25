@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use shader_magician::{BuildInstructions, ShaderComposer};
+use shader_magician::{BuildInstructions, CompilationInstructions, ShaderComposer};
 
 
 /**
@@ -57,6 +57,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         vs_mods_path.push("vs_mods");
         let mut meta_path = test_path.clone();
         meta_path.push("meta.toml");
+
+        std::fs::create_dir_all(&in_path)?;
+        std::fs::create_dir_all(&out_path)?;
+        std::fs::create_dir_all(&lib_path)?;
+        std::fs::create_dir_all(&fs_mods_path)?;
+        std::fs::create_dir_all(&vs_mods_path)?;
 
         // import metadata
         let meta_content = std::fs::read_to_string(meta_path)?;
@@ -128,9 +134,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // get vertex and fragment input paths
         let mut vs_in_path = test_path.clone();
-        vs_in_path.push(metadata.import_rewrites.get("vertex").expect("Vertex shader not specified"));
+        vs_in_path.push(metadata.import_rewrites.iter().find(|a| a.0 == "vertex").expect("Vertex shader not specified").1.clone());
         let mut fs_in_path = test_path.clone();
-        fs_in_path.push(metadata.import_rewrites.get("fragment").expect("Fragment shader not specified"));
+        fs_in_path.push(metadata.import_rewrites.iter().find(|a| a.0 == "fragment").expect("Fragment shader not specified").1.clone());
 
         // get vertex and fragment file stems
         let vs_file_stem = vs_in_path.file_stem().map(|a| a.to_str()).flatten().expect("Failed to get vertex file stem");
@@ -139,13 +145,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!(" - Compiling final shaders");
 
         // build vertex shader
-        let vs_output = composer.compile(vs_file_stem, vs_mods, metadata.import_rewrites.clone(), vec![], VERTEX_BUILD_INSTRUCTIONS);
+        let vs_output = composer.compile(CompilationInstructions {
+            shader: vs_file_stem,
+            modifiers: &vs_mods,
+            import_rewrites: &metadata.import_rewrites.iter().map(|a| (a.0.clone(), a.1.clone())).collect::<Vec<_>>(),
+            instructions: &VERTEX_BUILD_INSTRUCTIONS,
+            ..Default::default()
+        });
         let mut vs_output_path = out_path.clone();
         vs_output_path.push("vertex.wgsl");
         std::fs::write(vs_output_path, vs_output)?;
 
         // build fragment shader
-        let fs_output = composer.compile(fs_file_stem, fs_mods, metadata.import_rewrites.clone(), vec![], FRAGMENT_BUILD_INSTRUCTIONS);
+        let fs_output = composer.compile(CompilationInstructions { 
+            shader: fs_file_stem, 
+            modifiers: &fs_mods, 
+            import_rewrites: &metadata.import_rewrites.iter().map(|a| (a.0.clone(), a.1.clone())).collect::<Vec<_>>(), 
+            instructions: &FRAGMENT_BUILD_INSTRUCTIONS,
+            ..Default::default()
+        });
         let mut fs_output_path = out_path.clone();
         fs_output_path.push("fragment.wgsl");
         std::fs::write(fs_output_path, fs_output)?;

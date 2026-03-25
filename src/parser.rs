@@ -92,10 +92,18 @@ impl Parser {
         let mut raw = String::new();
         
         while let Some(c) = self.peek_char() {
+            // skip microslops \r
+            if c == '\r' { 
+                self.consume_char(); 
+                continue; 
+            }
+
+            // stop at newline
             if c == '\n' {
                 self.consume_char(); // consume the newline
                 break;
             }
+            
             raw.push(self.consume_char().unwrap());
         }
         
