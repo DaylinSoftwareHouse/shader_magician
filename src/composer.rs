@@ -2,7 +2,7 @@ use std::{collections::{HashMap, HashSet, LinkedList}, error::Error, hash::{Hash
 
 use ahash::AHasher;
 
-use crate::{Attr, Param, ShaderElement, ShaderFile};
+use crate::{Attr, BlockParser, Param, ShaderElement, ShaderFile};
 
 /// The default build instruction used in `CompilationInstructions`.
 pub const DEFAULT_BUILD_INSTRUCTION: &'static BuildInstructions<'static> = &BuildInstructions {
@@ -224,6 +224,8 @@ impl ShaderComposer {
                     mfc.push_str(&format!("    result = {}({}, result);\n", mod_function, params))
                 }
                 mfc.push_str("    return result;\n}");
+                let mfc_block = BlockParser::new(&mfc).parse_block();
+                let Ok(mfc_block) = mfc_block else { panic!("Failed to load mfc function"); };
 
                 // build main function
                 let main_function = ShaderElement::Function { 
@@ -231,7 +233,7 @@ impl ShaderComposer {
                     name: build_instuctions.main_fn_name.to_string(), 
                     params: params_typed, 
                     ret_ty: Some(build_instuctions.output_type.to_string()), 
-                    block: mfc, 
+                    block: mfc_block, 
                     preprocessor_instructions: vec![] 
                 };
 

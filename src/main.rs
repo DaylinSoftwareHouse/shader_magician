@@ -132,6 +132,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
+        println!(" - Finished importing shaders");
+
         // get vertex and fragment input paths
         let mut vs_in_path = test_path.clone();
         vs_in_path.push(metadata.import_rewrites.iter().find(|a| a.0 == "vertex").expect("Vertex shader not specified").1.clone());

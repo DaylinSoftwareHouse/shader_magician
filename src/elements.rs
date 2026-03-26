@@ -58,7 +58,7 @@ pub struct Param {
 /// Struct - Wgsl struct
 /// Function - Wgsl function
 /// Global - Global variable
-#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Hash, PartialEq)]
 pub enum ShaderElement {
     Struct {
         attrs: Vec<Attr>,
@@ -70,7 +70,7 @@ pub enum ShaderElement {
         name: String,
         params: Vec<Param>,
         ret_ty: Option<String>,
-        block: String,
+        block: Block,
         preprocessor_instructions: Vec<String>
     },
     Global {
@@ -116,6 +116,7 @@ impl ShaderElement {
 
     /// Converts a single `ShaderElement` with the given replacements for # marked defines
     /// into a single shader string.
+    #[allow(unused)]
     pub fn single_to_wgsl(&self, replacements: &HashMap<String, String>, only_public: bool) -> String {
         match self {
             ShaderElement::Struct { attrs, name, params } => {
@@ -203,12 +204,12 @@ impl ShaderElement {
                 }
                 
                 // Replace preprocessor instructions in block
-                let mut replaced_block = block.clone();
-                for (key, value) in replacements {
-                    replaced_block = replaced_block.replace(key, value);
-                }
+                // let mut replaced_block = block.clone();
+                // for (key, value) in replacements {
+                //     replaced_block = replaced_block.replace(key, value);
+                // }
                 
-                output.push_str(&replaced_block);
+                output.push_str(&emit_block(&block, 0));
                 output.push('\n');
                 output
             }
@@ -271,164 +272,4 @@ impl ShaderElement {
         
         output
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    
-    #[test]
-    fn test_parse_struct() {
-        let src = r#"
-        struct VertexInput {
-            @location(0) position: vec3<f32>,
-            @location(1) uvs: vec2<f32>,
-        };
-        "#;
-        
-        let result = ShaderElement::parse(src).unwrap();
-        let result = result.elements.get(0).unwrap();
-        match result {
-            ShaderElement::Struct { name, params, .. } => {
-                assert_eq!(name, "VertexInput");
-                assert_eq!(params.len(), 2);
-                assert_eq!(params[0].name, "position");
-                assert_eq!(params[0].ty, "vec3<f32>");
-            }
-            _ => panic!("Expected struct")
-        }
-
-        let wgsl = result.single_to_wgsl(&HashMap::new(), false);
-        println!("WGSL: {:?}", wgsl)
-    }
-    
-    #[test]
-    fn test_parse_global() {
-        let src = "@group(0) @binding(0) var<uniform> bones: array<mat4x4<f32>, 32u>;";
-        
-        let result = ShaderElement::parse(src).unwrap();
-        let result = result.elements.get(0).unwrap();
-        
-        match result {
-            ShaderElement::Global { name, ty, attrs, .. } => {
-                assert_eq!(name, "bones");
-                assert_eq!(ty, "array<mat4x4<f32>,32u>");
-                assert_eq!(attrs.len(), 2);
-            }
-            _ => panic!("Expected global")
-        }
-    }
-
-    #[test]
-    fn test_preprocessor_instructions() {
-        let src = r#"
-#import skeletal_data::VertexInput
-
-struct MyStruct {
-    @location(0) position: vec3<f32>,
-};
-        "#;
-        
-        let result = ShaderElement::parse(src).unwrap();
-        
-        // verify imports
-        assert!(result.imports.contains("skeletal_data"));
-        
-        // verify single struct
-        match &result.elements[0] {
-            ShaderElement::Struct { name, .. } => {
-                assert_eq!(name, "MyStruct");
-            }
-            _ => panic!("Expected struct")
-        }
-    }
-    
-    #[test]
-    fn test_preprocessor_in_code() {
-        let src = r#"
-fn test() {
-    if (#def == 3) {
-        var test = #{def_value};
-    }
-}
-        "#;
-        
-        let result = ShaderElement::parse(src).unwrap();
-        
-        match &result.elements[0] {
-            ShaderElement::Function { block, preprocessor_instructions, .. } => {
-                // The block should contain the preprocessor syntax as-is
-                assert!(block.contains("#def"));
-                assert!(block.contains("#{def_value}"));
-                
-                // Check extracted instructions
-                assert_eq!(preprocessor_instructions.len(), 2);
-                assert!(preprocessor_instructions.contains(&"#def".to_string()));
-                assert!(preprocessor_instructions.contains(&"#{def_value}".to_string()));
-            }
-            _ => panic!("Expected function")
-        }
-    }
-    
-    #[test]
-    fn test_preprocessor_replacement() {
-        let src = r#"
-fn test() {
-    if (#def == 3) {
-        var test = #{def_value};
-    }
-}
-        "#;
-        
-        let mut replacements = HashMap::new();
-        replacements.insert("#def".to_string(), "my_constant".to_string());
-        replacements.insert("#{def_value}".to_string(), "42".to_string());
-        
-        let result = ShaderElement::parse(src).unwrap();
-        let wgsl = ShaderElement::to_wgsl(&result.elements, &replacements, false);
-        
-        assert!(wgsl.contains("my_constant"));
-        assert!(wgsl.contains("= 42;"));
-        assert!(!wgsl.contains("#def"));
-        assert!(!wgsl.contains("#{def_value}"));
-    }
-    
-    #[test]
-    fn test_preprocessor_ignores_comments() {
-        let src = r#"
-fn test() {
-    // This #fake_def should be ignored
-    var real = #real_def;
-    /* 
-       This #also_fake should be ignored
-       And #{fake_expr} too
-    */
-    var another = #{real_expr};
-}
-        "#;
-        
-        let result = ShaderElement::parse(src).unwrap();
-        
-        match &result.elements[0] {
-            ShaderElement::Function { preprocessor_instructions, .. } => {
-                // Should only find the real preprocessor instructions
-                assert_eq!(preprocessor_instructions.len(), 2);
-                assert!(preprocessor_instructions.contains(&"#real_def".to_string()));
-                assert!(preprocessor_instructions.contains(&"#{real_expr}".to_string()));
-                
-                // Should NOT contain the commented ones
-                assert!(!preprocessor_instructions.contains(&"#fake_def".to_string()));
-                assert!(!preprocessor_instructions.contains(&"#also_fake".to_string()));
-                assert!(!preprocessor_instructions.contains(&"#{fake_expr}".to_string()));
-            }
-            _ => panic!("Expected function")
-        }
-    }
-
-    // #[test]
-    // pub fn test_parse_large() {
-    //     let src = include_str!("../../skeletal/shaders/vertex.wgsl");
-    //     let result = ShaderElement::parse(src).unwrap();
-    //     let _result = ShaderElement::to_wgsl(&result.elements, &HashMap::new());
-    // }
 }

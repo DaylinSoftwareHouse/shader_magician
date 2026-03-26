@@ -72,7 +72,7 @@ impl Parser {
         let attrs = self.parse_attributes()?;
         
         self.skip_whitespace_and_comments();
-        
+
         // Check what kind of element this is
         if self.peek_word() == "struct" {
             self.parse_struct(attrs)
@@ -242,21 +242,25 @@ impl Parser {
         
         self.skip_whitespace_and_comments();
         
-        let block = self.consume_block()?;
+        // let block = self.consume_block()?;
+        let raw_block = self.consume_block()?;   // still consumed as a raw string
+        let body = BlockParser::new(&raw_block)  // then parsed into a typed AST
+            .parse_block()?;
         
         // Extract preprocessor instructions from the block
-        let preprocessor_instructions = Self::extract_preprocessor_instructions(&block);
+        // let preprocessor_instructions = Self::extract_preprocessor_instructions(&body);
         
         Ok(ShaderElement::Function {
             attrs,
             name,
             params,
-            block,
+            block: body,
             ret_ty,
-            preprocessor_instructions
+            preprocessor_instructions: vec![]
         })
     }
     
+    #[allow(dead_code)]
     fn extract_preprocessor_instructions(block: &str) -> Vec<String> {
         let mut instructions = Vec::new();
         let mut chars = block.chars().peekable();
