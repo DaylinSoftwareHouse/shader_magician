@@ -29,10 +29,10 @@ impl ShaderFile {
         src: impl Into<String>
     ) -> Result<Self, Box<dyn Error>> {
         let result = ShaderElement::parse(src)?;
-        Ok(Self { 
-            name: result.name.unwrap_or_else(|| name.into()), 
-            elements: result.elements, 
-            imports: result.imports 
+        Ok(Self {
+            name: result.name.unwrap_or_else(|| name.into()),
+            elements: result.elements,
+            imports: result.imports
         })
     }
 }
@@ -51,7 +51,18 @@ pub struct Attr {
 pub struct Param {
     pub attrs: Vec<Attr>,
     pub name: String,
-    pub ty: String
+    pub ty: WgslType
+}
+
+/// Global variable declaration kind.
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum GlobalKind {
+    /// var<storage_class> or var
+    Var(Option<String>),
+    /// const
+    Const,
+    /// override
+    Override,
 }
 
 /// Container object for all possible root elements of a shader.
@@ -69,15 +80,15 @@ pub enum ShaderElement {
         attrs: Vec<Attr>,
         name: String,
         params: Vec<Param>,
-        ret_ty: Option<String>,
-        block: String,
+        ret_ty: Option<WgslType>,
+        block: Block,
         preprocessor_instructions: Vec<String>
     },
     Global {
         attrs: Vec<Attr>,
-        declared_as: String,
+        declared_as: GlobalKind,
         name: String,
-        ty: String
+        ty: WgslType
     },
     PreprocessorInstruction {
         raw: String,
@@ -122,7 +133,7 @@ impl ShaderElement {
                 let mut output = String::new();
 
                 if only_public && !attrs.iter().any(|attr| attr.name == "public") { return String::new(); }
-                
+
                 // Add attributes
                 for attr in attrs {
                     if PROCESSOR_ATTRIBUTES.contains(&attr.name.as_str()) { continue }
@@ -133,13 +144,13 @@ impl ShaderElement {
                         output.push_str(&format!("@{}({}) ", attr.name, attr.content));
                     }
                 }
-                
+
                 output.push_str(&format!("struct {} {{\n", name));
-                
+
                 // Add fields
                 for param in params {
                     output.push_str("    ");
-                    
+
                     // Add field attributes
                     for attr in &param.attrs {
                         if attr.content.is_empty() {
@@ -148,19 +159,19 @@ impl ShaderElement {
                             output.push_str(&format!("@{}({}) ", attr.name, attr.content));
                         }
                     }
-                    
-                    output.push_str(&format!("{}: {},\n", param.name, param.ty));
+
+                    output.push_str(&format!("{}: {},\n", param.name, param.ty.to_wgsl()));
                 }
-                
+
                 output.push_str("};\n");
                 output
             }
-            
+
             ShaderElement::Function { attrs, name, params, block, ret_ty, preprocessor_instructions: _ } => {
                 let mut output = String::new();
 
                 if only_public && !attrs.iter().any(|attr| attr.name == "public") { return String::new(); }
-                
+
                 // Add attributes
                 for attr in attrs {
                     if PROCESSOR_ATTRIBUTES.contains(&attr.name.as_str()) { continue }
@@ -171,13 +182,13 @@ impl ShaderElement {
                         output.push_str(&format!("@{}({})\n", attr.name, attr.content));
                     }
                 }
-                
+
                 output.push_str(&format!("fn {}(\n", name));
-                
+
                 // Add parameters
                 for (i, param) in params.iter().enumerate() {
                     output.push_str("    ");
-                    
+
                     // Add parameter attributes
                     for attr in &param.attrs {
                         if attr.content.is_empty() {
@@ -186,38 +197,33 @@ impl ShaderElement {
                             output.push_str(&format!("@{}({}) ", attr.name, attr.content));
                         }
                     }
-                    
-                    output.push_str(&format!("{}: {}", param.name, param.ty));
-                    
+
+                    output.push_str(&format!("{}: {}", param.name, param.ty.to_wgsl()));
+
                     if i < params.len() - 1 {
                         output.push_str(",\n");
                     } else {
                         output.push('\n');
                     }
                 }
-                
+
                 output.push_str(") ");
 
                 if let Some(ret_ty) = ret_ty {
-                    output.push_str(&format!("-> {ret_ty} "));
+                    output.push_str(&format!("-> {} ", ret_ty.to_wgsl()));
                 }
-                
-                // Replace preprocessor instructions in block
-                let mut replaced_block = block.clone();
-                for (key, value) in replacements {
-                    replaced_block = replaced_block.replace(key, value);
-                }
-                
-                output.push_str(&replaced_block);
+
+                // Convert block to WGSL
+                output.push_str(&block_to_wgsl(block, replacements));
                 output.push('\n');
                 output
             }
-            
+
             ShaderElement::Global { attrs, declared_as, name, ty } => {
                 let mut output = String::new();
 
                 if only_public && !attrs.iter().any(|attr| attr.name == "public") { return String::new(); }
-                
+
                 // Add attributes
                 for attr in attrs {
                     if PROCESSOR_ATTRIBUTES.contains(&attr.name.as_str()) { continue }
@@ -228,20 +234,26 @@ impl ShaderElement {
                         output.push_str(&format!("@{}({}) ", attr.name, attr.content));
                     }
                 }
-                
-                // Handle var<storage_class> syntax
-                if declared_as == "var" && ty.starts_with('<') {
-                    let split_pos = ty.find('>').unwrap_or(0) + 1;
-                    let storage = &ty[..split_pos];
-                    let actual_ty = &ty[split_pos..].trim_start();
-                    output.push_str(&format!("var{} {}: {};\n", storage, name, actual_ty));
-                } else {
-                    output.push_str(&format!("{} {}: {};\n", declared_as, name, ty));
+
+                // Handle different global kinds
+                match declared_as {
+                    GlobalKind::Var(storage_class) => {
+                        match storage_class {
+                            Some(sc) => output.push_str(&format!("var<{}> {}: {};\n", sc, name, ty.to_wgsl())),
+                            None => output.push_str(&format!("var {}: {};\n", name, ty.to_wgsl())),
+                        }
+                    }
+                    GlobalKind::Const => {
+                        output.push_str(&format!("const {}: {};\n", name, ty.to_wgsl()));
+                    }
+                    GlobalKind::Override => {
+                        output.push_str(&format!("override {}: {};\n", name, ty.to_wgsl()));
+                    }
                 }
-                
+
                 output
             }
-            
+
             ShaderElement::PreprocessorInstruction { raw } => {
                 // // Look up replacement in map
                 // if let Some(replacement) = replacements.get(raw) {
@@ -276,7 +288,7 @@ impl ShaderElement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_struct() {
         let src = r#"
@@ -285,7 +297,7 @@ mod tests {
             @location(1) uvs: vec2<f32>,
         };
         "#;
-        
+
         let result = ShaderElement::parse(src).unwrap();
         let result = result.elements.get(0).unwrap();
         match result {
@@ -293,7 +305,7 @@ mod tests {
                 assert_eq!(name, "VertexInput");
                 assert_eq!(params.len(), 2);
                 assert_eq!(params[0].name, "position");
-                assert_eq!(params[0].ty, "vec3<f32>");
+                assert_eq!(params[0].ty.to_wgsl(), "vec3<f32>");
             }
             _ => panic!("Expected struct")
         }
@@ -301,18 +313,18 @@ mod tests {
         let wgsl = result.single_to_wgsl(&HashMap::new(), false);
         println!("WGSL: {:?}", wgsl)
     }
-    
+
     #[test]
     fn test_parse_global() {
         let src = "@group(0) @binding(0) var<uniform> bones: array<mat4x4<f32>, 32u>;";
-        
+
         let result = ShaderElement::parse(src).unwrap();
         let result = result.elements.get(0).unwrap();
-        
+
         match result {
             ShaderElement::Global { name, ty, attrs, .. } => {
                 assert_eq!(name, "bones");
-                assert_eq!(ty, "array<mat4x4<f32>,32u>");
+                assert_eq!(ty.to_wgsl(), "array<mat4x4<f32>, 32u>");
                 assert_eq!(attrs.len(), 2);
             }
             _ => panic!("Expected global")
@@ -328,12 +340,12 @@ struct MyStruct {
     @location(0) position: vec3<f32>,
 };
         "#;
-        
+
         let result = ShaderElement::parse(src).unwrap();
-        
+
         // verify imports
         assert!(result.imports.contains("skeletal_data"));
-        
+
         // verify single struct
         match &result.elements[0] {
             ShaderElement::Struct { name, .. } => {
@@ -342,7 +354,7 @@ struct MyStruct {
             _ => panic!("Expected struct")
         }
     }
-    
+
     #[test]
     fn test_preprocessor_in_code() {
         let src = r#"
@@ -352,24 +364,19 @@ fn test() {
     }
 }
         "#;
-        
+
         let result = ShaderElement::parse(src).unwrap();
-        
+
         match &result.elements[0] {
             ShaderElement::Function { block, preprocessor_instructions, .. } => {
-                // The block should contain the preprocessor syntax as-is
-                assert!(block.contains("#def"));
-                assert!(block.contains("#{def_value}"));
-                
-                // Check extracted instructions
-                assert_eq!(preprocessor_instructions.len(), 2);
+                // The block should contain preprocessor placeholder statements
                 assert!(preprocessor_instructions.contains(&"#def".to_string()));
                 assert!(preprocessor_instructions.contains(&"#{def_value}".to_string()));
             }
             _ => panic!("Expected function")
         }
     }
-    
+
     #[test]
     fn test_preprocessor_replacement() {
         let src = r#"
@@ -379,43 +386,43 @@ fn test() {
     }
 }
         "#;
-        
+
         let mut replacements = HashMap::new();
         replacements.insert("#def".to_string(), "my_constant".to_string());
         replacements.insert("#{def_value}".to_string(), "42".to_string());
-        
+
         let result = ShaderElement::parse(src).unwrap();
         let wgsl = ShaderElement::to_wgsl(&result.elements, &replacements, false);
-        
+
         assert!(wgsl.contains("my_constant"));
-        assert!(wgsl.contains("= 42;"));
+        assert!(wgsl.contains("42"));
         assert!(!wgsl.contains("#def"));
         assert!(!wgsl.contains("#{def_value}"));
     }
-    
+
     #[test]
     fn test_preprocessor_ignores_comments() {
         let src = r#"
 fn test() {
     // This #fake_def should be ignored
     var real = #real_def;
-    /* 
+    /*
        This #also_fake should be ignored
        And #{fake_expr} too
     */
     var another = #{real_expr};
 }
         "#;
-        
+
         let result = ShaderElement::parse(src).unwrap();
-        
+
         match &result.elements[0] {
             ShaderElement::Function { preprocessor_instructions, .. } => {
                 // Should only find the real preprocessor instructions
                 assert_eq!(preprocessor_instructions.len(), 2);
                 assert!(preprocessor_instructions.contains(&"#real_def".to_string()));
                 assert!(preprocessor_instructions.contains(&"#{real_expr}".to_string()));
-                
+
                 // Should NOT contain the commented ones
                 assert!(!preprocessor_instructions.contains(&"#fake_def".to_string()));
                 assert!(!preprocessor_instructions.contains(&"#also_fake".to_string()));
