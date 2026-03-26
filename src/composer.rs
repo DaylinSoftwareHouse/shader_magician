@@ -4,6 +4,7 @@ use ahash::AHasher;
 
 use crate::{Attr, Param, ShaderElement, ShaderFile};
 
+/// The default build instruction used in `CompilationInstructions`.
 pub const DEFAULT_BUILD_INSTRUCTION: &'static BuildInstructions<'static> = &BuildInstructions {
     main_attribute: "@main",
     main_fn_name: "main",
