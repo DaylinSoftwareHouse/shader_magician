@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::*;
 
-pub const PROCESSOR_ATTRIBUTES: &[&str] = &["main", "public"];
+pub const PROCESSOR_ATTRIBUTES: &[&str] = &["main", "public", "default"];
 
 /// Storage object for all needed data for a pre-compiled shader.
 #[derive(Default, Debug, Clone)]

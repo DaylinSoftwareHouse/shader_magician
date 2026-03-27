@@ -56,8 +56,7 @@ pub struct BuildInstructions<'a> {
 /// * instructions: The build instructions that apply to this instruction.
 #[derive(Clone, Copy, Hash)]
 pub struct CompilationInstructions<'a> {
-    pub shader: &'a str,
-    pub modifiers: &'a [String],
+    pub shaders: &'a [String],
     pub import_rewrites: &'a [(String, String)],
     pub defs: &'a [(String, String)],
     pub prefix: &'a [ShaderElement],
@@ -67,8 +66,7 @@ pub struct CompilationInstructions<'a> {
 impl <'a> Default for CompilationInstructions<'a> {
     fn default() -> Self {
         Self {
-            shader: "",
-            modifiers: &[],
+            shaders: &[],
             import_rewrites: &[],
             defs: &[],
             prefix: &[],
@@ -79,8 +77,6 @@ impl <'a> Default for CompilationInstructions<'a> {
 
 struct ImportInstruction {
     filename: String,
-    is_main: bool,
-    is_mod: bool,
     only_public: bool
 }
 
@@ -117,10 +113,9 @@ impl ShaderComposer {
         instructions: CompilationInstructions
     ) -> &String {
         // complete intos
-        let shader = instructions.shader;
+        let shaders = instructions.shaders;
         let mut import_rewrites = instructions.import_rewrites.iter().cloned().collect::<HashMap<_, _>>();
         let defs = instructions.defs;
-        let modifiers = instructions.modifiers;
         let build_instuctions = instructions.instructions;
 
         // hash key
@@ -136,26 +131,19 @@ impl ShaderComposer {
                 let mut output = String::new();
                 let replacements = defs.iter().cloned().collect::<HashMap<_, _>>();
 
-                // add prefix to the front of the shader if necessary
-                if !instructions.prefix.is_empty() {
-                    let prefix = ShaderElement::to_wgsl(&instructions.prefix, &replacements, false);
-                    output.push_str(&prefix);
-                }
-
                 // create initial import list ot compile
                 let mut imported = HashSet::<String>::new();
                 let mut to_import = LinkedList::<ImportInstruction>::new();
-                imported.insert(shader.to_string());
-                to_import.push_front(ImportInstruction { filename: shader.to_string(), is_main: true, is_mod: false, only_public: false });
 
                 // add mods to import list
-                for modifier in modifiers {
-                    imported.insert(modifier.clone());
-                    to_import.push_back(ImportInstruction { filename: modifier.clone(), is_main: false, is_mod: true, only_public: false });
+                for shader in shaders {
+                    imported.insert(shader.to_string());
+                    to_import.push_back(ImportInstruction { filename: shader.to_string(), only_public: false });
                 }
 
-                let mut main_function = Option::<String>::None;
-                let mut mod_functions = Vec::<String>::new();
+                let output_type = build_instuctions.output_type.to_string();
+                let mut output_type_def_function = Option::<String>::None;
+                let mut processors = Vec::<String>::new();
 
                 // load all imports
                 while let Some(mut import) = to_import.pop_front() {
@@ -182,23 +170,75 @@ impl ShaderComposer {
                             _ => None
                         })
                         .next();
+                    
+                    // attempt to find default function for output_type
+                    if let Some(local_def_function) = file.elements
+                        .iter()
+                        .filter_map(|element| match element {
+                            ShaderElement::Function { attrs, name, params: _, ret_ty: _, block: _, preprocessor_instructions: _ } => {
+                                if attrs.iter().any(|a| a.name == "public") && attrs.iter().any(|a| a.name == "default" && a.content == output_type) {
+                                    Some(name.clone())
+                                } else {
+                                    None
+                                }
+                            },
+                            _ => None
+                        })
+                        .next() 
+                    {
+                        output_type_def_function = Some(local_def_function);
+                    }
 
-                    // save to main or mod function lists
-                    if import.is_main {
-                        main_function = Some(local_main.expect("No main found in main shader file"));
-                    } else if import.is_mod {
-                        mod_functions.push(local_main.expect("No main found in mod shader file"));
+                    if let Some(local_main) = local_main {
+                        processors.push(local_main);
                     }
 
                     // save next imports
                     for import in &file.imports {
                         if imported.contains(import) { continue }
                         imported.insert(import.clone());
-                        to_import.push_back(ImportInstruction { filename: import.clone(), only_public: true, is_main: false, is_mod: false });
+                        to_import.push_back(ImportInstruction { filename: import.clone(), only_public: true });
                     }
 
                     // convert to wgsl and save to output
                     output.insert_str(0, &ShaderElement::to_wgsl(&file.elements, &replacements, import.only_public));
+                }
+
+                // look for processor functions and defaults in prefix
+                {
+                    let local_main = instructions.prefix.iter()
+                        .filter_map(|element| match element {
+                            ShaderElement::Function { attrs, name, params: _, ret_ty: _, block: _, preprocessor_instructions: _ } => {
+                                if attrs.iter().any(|a| a.name == "main") {
+                                    Some(name.clone())
+                                } else {
+                                    None
+                                }
+                            },
+                            _ => None
+                        })
+                        .next();
+
+                    let local_default = instructions.prefix.iter()
+                        .filter_map(|element| match element {
+                            ShaderElement::Function { attrs, name, params: _, ret_ty: _, block: _, preprocessor_instructions: _ } => {
+                                if attrs.iter().any(|a| a.name == "public") && attrs.iter().any(|a| a.name == "default" && a.content == output_type) {
+                                    Some(name.clone())
+                                } else {
+                                    None
+                                }
+                            },
+                            _ => None
+                        })
+                        .next();
+
+                    if let Some(local_main) = local_main {
+                        processors.push(local_main);
+                    }
+
+                    if let Some(local_default) = local_default {
+                        output_type_def_function = Some(local_default);
+                    }
                 }
 
                 // compute parameter names
@@ -219,8 +259,9 @@ impl ShaderComposer {
                 // compute main function code
                 let mut mfc = String::new();
                 mfc.push_str("{\n");
-                mfc.push_str(&format!("    var result = {}({});\n", main_function.expect("No main function provided in main shader"), params));
-                for mod_function in mod_functions.drain(..) {
+                mfc.push_str(&format!("    var result = {}();\n", output_type_def_function.expect(format!("No default function found for {}", output_type).as_str())));
+                // mfc.push_str(&format!("    result = {}({}, result);\n", main_function.expect("No main function provided in main shader"), params));
+                for mod_function in processors.drain(..) {
                     mfc.push_str(&format!("    result = {}({}, result);\n", mod_function, params))
                 }
                 mfc.push_str("    return result;\n}");
@@ -232,7 +273,7 @@ impl ShaderComposer {
                     attrs: vec![Attr { name: build_instuctions.main_attribute.to_string(), content: String::new() }], 
                     name: build_instuctions.main_fn_name.to_string(), 
                     params: params_typed, 
-                    ret_ty: Some(build_instuctions.output_type.to_string()), 
+                    ret_ty: Some(output_type), 
                     block: mfc_block, 
                     preprocessor_instructions: vec![] 
                 };

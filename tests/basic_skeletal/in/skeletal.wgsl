@@ -26,6 +26,19 @@ struct VertexOutput {
     @location(4) mat_id: u32
 };
 
+@public
+@default(VertexOutput)
+fn def_vertex_output() -> VertexOutput {
+    var out: VertexOutput;
+    out.clip_position = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    out.uvs = vec2<f32>(0.0, 0.0);
+    out.color = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+    out.world_normal = vec3<f32>(0.0, 1.0, 0.0);
+    out.world_position = vec3<f32>(0.0, 0.0, 0.0);
+    out.mat_id = 0;
+    return out;
+}
+
 @group(3) @binding(0) var<uniform> bones: array<mat4x4<f32>, 32u>;
 @group(3) @binding(1) var<uniform> nodes: array<mat4x4<f32>, 32u>;
 @group(0) @binding(0) var<uniform> camera_vp: mat4x4<f32>;
@@ -33,7 +46,8 @@ struct VertexOutput {
 @main
 fn vs_main(
     model: VertexInput,
-    instance: InstanceInput
+    instance: InstanceInput,
+    out: VertexOutput
 ) -> VertexOutput {
     // the models position, rotation, scale
     var model_matrix = mat4x4<f32>(
@@ -53,7 +67,6 @@ fn vs_main(
     }
 
     // setup color and tex coord output
-    var out: VertexOutput;
     out.uvs = model.uvs;
     out.color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
 

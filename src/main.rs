@@ -23,7 +23,7 @@ const FRAGMENT_BUILD_INSTRUCTIONS: BuildInstructions<'static> = BuildInstruction
     main_attribute: "fragment",
     main_fn_name: "fs_final",
     input_types: &["VertexOutput"],
-    output_type: "vec4<f32>"
+    output_type: "FragmentOutput"
 };
 
 
@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         // import fs_mods shaders
-        let mut fs_mods = Vec::new();
+        let mut fs_shaders = Vec::new();
         if fs_mods_path.exists() {
             for lib in std::fs::read_dir(&fs_mods_path)? {
                 let Some(lib) = lib.ok() else { continue };
@@ -96,12 +96,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!(" - Loading input shader {file_stem:?}");
 
                 composer.load_file_from_src(file_stem, content)?;
-                fs_mods.push(file_stem.to_string());
+                fs_shaders.push(file_stem.to_string());
             }
         }
 
         // import fs_mods shaders
-        let mut vs_mods = Vec::new();
+        let mut vs_shaders = Vec::new();
         if vs_mods_path.exists() {
             for lib in std::fs::read_dir(&vs_mods_path)? {
                 let Some(lib) = lib.ok() else { continue };
@@ -113,7 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!(" - Loading input shader {file_stem:?}");
 
                 composer.load_file_from_src(file_stem, content)?;
-                vs_mods.push(file_stem.to_string());
+                vs_shaders.push(file_stem.to_string());
             }
         }
 
@@ -143,13 +143,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // get vertex and fragment file stems
         let vs_file_stem = vs_in_path.file_stem().map(|a| a.to_str()).flatten().expect("Failed to get vertex file stem");
         let fs_file_stem = fs_in_path.file_stem().map(|a| a.to_str()).flatten().expect("Failed to get fragment file stem");
+        vs_shaders.push(vs_file_stem.to_string());
+        fs_shaders.push(fs_file_stem.to_string());
 
         println!(" - Compiling final shaders");
 
         // build vertex shader
         let vs_output = composer.compile(CompilationInstructions {
-            shader: vs_file_stem,
-            modifiers: &vs_mods,
+            shaders: &vs_shaders,
             import_rewrites: &metadata.import_rewrites.iter().map(|a| (a.0.clone(), a.1.clone())).collect::<Vec<_>>(),
             instructions: &VERTEX_BUILD_INSTRUCTIONS,
             ..Default::default()
@@ -160,8 +161,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // build fragment shader
         let fs_output = composer.compile(CompilationInstructions { 
-            shader: fs_file_stem, 
-            modifiers: &fs_mods, 
+            shaders: &fs_shaders, 
             import_rewrites: &metadata.import_rewrites.iter().map(|a| (a.0.clone(), a.1.clone())).collect::<Vec<_>>(), 
             instructions: &FRAGMENT_BUILD_INSTRUCTIONS,
             ..Default::default()

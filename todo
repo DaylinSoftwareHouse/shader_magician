@@ -2,5 +2,6 @@
 [x] Introduce @public notations
 [x] Allow for production of split final fragment and vertex shaders
 [x] Shader modifiers
-[ ] Better conditional compilation support
-[ ] Check rust features for conditional compilation
+[x] Finish @default support so that main functions do not need to fill everything
+[ ] Bring back # replacements (look for #[allow] markers that hide the warnings for the unused left-overs)
+[ ] Better conditional compilation support using #ifdef, #else, and #endif
