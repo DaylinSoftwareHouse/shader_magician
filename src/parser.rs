@@ -115,13 +115,14 @@ impl Parser {
         
         loop {
             self.skip_whitespace_and_comments();
-            if !self.peek_char().map_or(false, |c| c == '@') {
+
+            if self.peek_char() != Some('@') {
                 break;
             }
             
             self.consume_char(); // consume '@'
             let name = self.consume_identifier()?;
-            
+
             self.skip_whitespace_and_comments();
             
             let content = if self.peek_char() == Some('(') {
@@ -157,11 +158,13 @@ impl Parser {
                 self.consume_char();
                 break;
             }
-            
+
+            self.skip_whitespace_and_comments();
+
             // Parse field attributes
             let field_attrs = self.parse_attributes()?;
             self.skip_whitespace_and_comments();
-            
+
             let param_name = self.consume_identifier()?;
             self.skip_whitespace_and_comments();
             self.expect_char(':')?;
@@ -205,12 +208,16 @@ impl Parser {
         
         loop {
             self.skip_whitespace_and_comments();
-            
+
             if self.peek_char() == Some(')') {
                 self.consume_char();
                 break;
             }
-            
+
+            let attrs = 
+                if self.peek_char() == Some('@') { self.parse_attributes()? }
+                else { Vec::new() };
+
             let param_name = self.consume_identifier()?;
             self.skip_whitespace_and_comments();
             self.expect_char(':')?;
@@ -219,7 +226,7 @@ impl Parser {
             let param_ty = self.consume_type()?;
             
             params.push(Param {
-                attrs: Vec::new(),
+                attrs,
                 name: param_name,
                 ty: param_ty
             });

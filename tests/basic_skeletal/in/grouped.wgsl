@@ -10,7 +10,7 @@ struct Material {
 
 @public
 struct FragmentOutput {
-    color: vec4<f32>
+    @location(0) color: vec4<f32>
 };
 
 @public
@@ -21,7 +21,7 @@ fn def_fragment_output() -> FragmentOutput {
 }
 
 @main
-fn fs_main(in: VertexOutput, out: FragmentOutput) -> FragmentOutput {
+fn fs_main(in: VertexOutput, @mut out: FragmentOutput) -> FragmentOutput {
     let material = materials[in.mat_id];
     out.color = texture_sample(material.texture_id, in.uvs) * in.color;
     return out;

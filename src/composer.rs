@@ -261,7 +261,6 @@ impl ShaderComposer {
                 let mut mfc = String::new();
                 mfc.push_str("{\n");
                 mfc.push_str(&format!("    var result = {}();\n", output_type_def_function.expect(format!("No default function found for {}", output_type).as_str())));
-                // mfc.push_str(&format!("    result = {}({}, result);\n", main_function.expect("No main function provided in main shader"), params));
                 for mod_function in processors.drain(..) {
                     mfc.push_str(&format!("    result = {}({}, result);\n", mod_function, params))
                 }

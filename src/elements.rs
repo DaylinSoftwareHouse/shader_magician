@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::*;
 
-pub const PROCESSOR_ATTRIBUTES: &[&str] = &["main", "public", "default"];
+pub const PROCESSOR_ATTRIBUTES: &[&str] = &["main", "public", "default", "mut"];
 
 /// Storage object for all needed data for a pre-compiled shader.
 #[derive(Default, Debug, Clone)]
@@ -159,6 +159,7 @@ impl ShaderElement {
             
             ShaderElement::Function { attrs, name, params, block, ret_ty, preprocessor_instructions: _ } => {
                 let mut output = String::new();
+                let mut prefix = Vec::new();
 
                 if only_public && !attrs.iter().any(|attr| attr.name == "public") { return String::new(); }
                 
@@ -177,10 +178,24 @@ impl ShaderElement {
                 
                 // Add parameters
                 for (i, param) in params.iter().enumerate() {
+                    let mut param_name = param.name.clone();
                     output.push_str("    ");
                     
                     // Add parameter attributes
                     for attr in &param.attrs {
+                        if attr.name == "mut" {
+                            let new_param_name = format!("_mut_{param_name}");
+                            prefix.push(Statement::VarDecl(VarDecl { 
+                                kind: VarKind::Var, 
+                                template_args: None, 
+                                name: param_name, 
+                                ty: None, 
+                                initializer: Some(Expression::Identifier(new_param_name.clone())) 
+                            }));
+                            param_name = new_param_name;
+                        }
+                        if PROCESSOR_ATTRIBUTES.contains(&attr.name.as_str()) { continue }
+
                         if attr.content.is_empty() {
                             output.push_str(&format!("@{} ", attr.name));
                         } else {
@@ -188,7 +203,7 @@ impl ShaderElement {
                         }
                     }
                     
-                    output.push_str(&format!("{}: {}", param.name, param.ty));
+                    output.push_str(&format!("{}: {}", param_name, param.ty));
                     
                     if i < params.len() - 1 {
                         output.push_str(",\n");
@@ -208,8 +223,13 @@ impl ShaderElement {
                 // for (key, value) in replacements {
                 //     replaced_block = replaced_block.replace(key, value);
                 // }
+
+                let mut final_statments = Vec::with_capacity(prefix.len() + block.stmts.len());
+                final_statments.extend_from_slice(&prefix);
+                final_statments.extend_from_slice(&block.stmts);
+                let mut final_block = Block { stmts: final_statments };
                 
-                output.push_str(&emit_block(&block, 0));
+                output.push_str(&emit_block(&final_block, 0));
                 output.push('\n');
                 output
             }

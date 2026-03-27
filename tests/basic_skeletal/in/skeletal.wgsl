@@ -47,9 +47,8 @@ fn def_vertex_output() -> VertexOutput {
 fn vs_main(
     model: VertexInput,
     instance: InstanceInput,
-    out: VertexOutput
+    @mut out: VertexOutput
 ) -> VertexOutput {
-    // the models position, rotation, scale
     var model_matrix = mat4x4<f32>(
         instance.model_matrix_0,
         instance.model_matrix_1,
@@ -66,11 +65,10 @@ fn vs_main(
         model_matrix *= bones[model.joints.x];
     }
 
-    // setup color and tex coord output
     out.uvs = model.uvs;
     out.color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
-
     out.world_normal = model.normal;
+
     var world_position = model_matrix * vec4<f32>(model.position, 1.0);
     out.world_position = world_position.xyz;
     out.clip_position = camera_vp * world_position;
