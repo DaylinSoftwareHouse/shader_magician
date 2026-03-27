@@ -77,6 +77,7 @@ impl <'a> Default for CompilationInstructions<'a> {
 
 struct ImportInstruction {
     filename: String,
+    exclude_main: bool,
     only_public: bool
 }
 
@@ -138,7 +139,7 @@ impl ShaderComposer {
                 // add mods to import list
                 for shader in shaders {
                     imported.insert(shader.to_string());
-                    to_import.push_back(ImportInstruction { filename: shader.to_string(), only_public: false });
+                    to_import.push_back(ImportInstruction { filename: shader.to_string(), exclude_main: false, only_public: false });
                 }
 
                 let output_type = build_instuctions.output_type.to_string();
@@ -189,7 +190,7 @@ impl ShaderComposer {
                         output_type_def_function = Some(local_def_function);
                     }
 
-                    if let Some(local_main) = local_main {
+                    if let Some(local_main) = local_main && !import.exclude_main {
                         processors.push(local_main);
                     }
 
@@ -197,7 +198,7 @@ impl ShaderComposer {
                     for import in &file.imports {
                         if imported.contains(import) { continue }
                         imported.insert(import.clone());
-                        to_import.push_back(ImportInstruction { filename: import.clone(), only_public: true });
+                        to_import.push_back(ImportInstruction { filename: import.clone(), exclude_main: true, only_public: true });
                     }
 
                     // convert to wgsl and save to output
