@@ -1,0 +1,13 @@
+[package]
+name = "test-shaders"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# magician-core = { path = "../magician-core" }
+# magician-macros = { path = "../magician-macros" }
+
+[build-dependencies]
+# magician-core = { path = "../magician-core" }
+# magician-macros = { path = "../magician-macros" }
+# syn = "2.0.117"

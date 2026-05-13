@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
-use shader_magician::{BuildInstructions, CompilationInstructions, ShaderComposer};
+use magician_composer::{BuildInstructions, CompilationInstructions, ShaderComposer};
 
 
 /**

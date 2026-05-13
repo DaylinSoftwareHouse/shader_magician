@@ -1,8 +1,7 @@
 use std::{collections::{HashMap, HashSet, LinkedList}, error::Error, hash::{Hash, Hasher}};
 
 use ahash::AHasher;
-
-use crate::{Attr, BlockParser, Param, ShaderElement, ShaderFile};
+use magician_ast::{Attr, BlockParser, Param, ShaderElement, ShaderFile};
 
 /// The default build instruction used in `CompilationInstructions`.
 pub const DEFAULT_BUILD_INSTRUCTION: &'static BuildInstructions<'static> = &BuildInstructions {
