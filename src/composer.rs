@@ -132,6 +132,11 @@ impl ShaderComposer {
                 let mut output = String::new();
                 let replacements = defs.iter().cloned().collect::<HashMap<_, _>>();
 
+                // add prefix
+                if !instructions.prefix.is_empty() {
+                    output.push_str(&ShaderElement::to_wgsl(instructions.prefix, &replacements, false));
+                }
+
                 // create initial import list ot compile
                 let mut imported = HashSet::<String>::new();
                 let mut to_import = LinkedList::<ImportInstruction>::new();

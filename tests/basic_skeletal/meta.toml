@@ -2,3 +2,7 @@ import_rewrites = {
     vertex = "skeletal",
     fragment = "grouped"
 }
+
+replacements = {
+    STAGE_DEPTH = 45
+}
