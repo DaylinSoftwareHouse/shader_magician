@@ -2,6 +2,7 @@
 members = [
     "magician-ast",
     "magician-composer",
+    "magician-rust",
     "test-shaders"
 ]
 
