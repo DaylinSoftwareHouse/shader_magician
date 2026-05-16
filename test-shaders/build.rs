@@ -1,3 +1,5 @@
+use magician_rust::transpile;
+
 fn main() {
     let src_root = std::path::Path::new("src");
 
@@ -14,6 +16,10 @@ fn main() {
 
             let out_path = format!("./shader_out/extracted_{}.rs", fn_name);
             std::fs::write(&out_path, tree.to_string_pretty()).unwrap();
+
+            let wgsl = transpile(&tree.file);
+            let out_path = format!("./shader_out/{}.wgsl", fn_name);
+            std::fs::write(&out_path, wgsl).unwrap();
         }
     }
 }
