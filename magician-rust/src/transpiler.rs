@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use magician_ast::*;
+use syn::{Expr, Lit};
 
 pub fn transpile(file: &syn::File) -> String {
     let mut structs = Vec::new();
@@ -49,6 +50,10 @@ fn convert_param(item: &syn::Field) -> Param {
         .expect("Fields must be named for parameters")
         .to_string();
 
+    let attrs = item.attrs.iter()
+        .filter_map(translate_attr)
+        .collect::<Vec<_>>();
+
     let ty = match &item.ty {
         syn::Type::Path(type_path) => {
             let ident = type_path.path.segments.last()
@@ -75,7 +80,7 @@ fn convert_param(item: &syn::Field) -> Param {
         _ => todo!(),
     };
 
-    Param { attrs: vec![], name, ty }
+    Param { attrs, name, ty }
 }
 
 fn translate_ty_name(name: &str) -> &str {
@@ -96,5 +101,45 @@ fn translate_ty_name(name: &str) -> &str {
         "BVec3" => "vec3<bool>",
         "BVec4" => "vec4<bool>",
         other => other
+    }
+}
+
+fn translate_attr(attr: &syn::Attribute) -> Option<Attr> {
+    let (attr_name, arguments) = match &attr.meta {
+        syn::Meta::Path(path) => {
+            let ident = path
+                .get_ident()
+                .expect("Meta::Path in attribute had no identifier")
+                .to_string();
+            let value = None;
+            (ident, value)
+        },
+        syn::Meta::List(_meta_list) => todo!("Meta::List attributes"),
+        syn::Meta::NameValue(meta_name_value) => {
+            let ident = meta_name_value.path
+                .get_ident()
+                .expect("Meta::NameValue in attribute has no identifier")
+                .to_string();
+            let value = &meta_name_value.value;
+            (ident, Some(value))
+        },
+    };
+
+    match attr_name.as_str() {
+        "uniform" => Some(Attr { name: "uniform".to_string(), content: "".to_string() }), // todo
+        "location" => {
+            let Some(loc) = arguments else { panic!("Location attribute must have arguments") };
+            let Expr::Lit(loc) = loc else { panic!("Location attribute must have literal") };
+            let Lit::Int(loc) = &loc.lit else { panic!("Location attribute must have literal integer") };
+            let loc = loc.base10_parse::<u32>().expect("Failed to base10 parse location attribute literal integer");
+            Some(Attr { name: "location".to_string(), content: loc.to_string() })
+        },
+        "builtin" => {
+            let Some(loc) = arguments else { panic!("Builtin attribute must have arguments") };
+            let Expr::Lit(loc) = loc else { panic!("Builtin attribute must have literal") };
+            let Lit::Str(loc) = &loc.lit else { panic!("Builtin attribute must have literal string") };
+            Some(Attr { name: "builtin".to_string(), content: loc.value() })
+        },
+        _ => None
     }
 }
