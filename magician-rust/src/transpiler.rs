@@ -1,14 +1,41 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::atomic::{AtomicU32, Ordering}};
 
 use magician_ast::*;
+use proc_macro2::TokenTree;
 use syn::{Expr, Lit};
 
 pub fn transpile(file: &syn::File) -> String {
+    let counter = AtomicU32::new(0);
+    let mut globals = Vec::new();
     let mut structs = Vec::new();
     let functions = Vec::new();
 
     file.items.iter().for_each(|item| match &item {
-        syn::Item::Struct(item_struct) => { structs.push(convert_struct(item_struct)); },
+        syn::Item::Struct(item_struct) => {
+
+            let is_group = item_struct.attrs.iter().any(|attr| {
+                match &attr.meta {
+                    syn::Meta::List(list) => {
+                        let derive = list.path.get_ident().map(|a| a.to_string() == "derive").unwrap_or(false);
+                        let is_group = list.tokens.clone()
+                            .into_iter().next()
+                            .map(|ident| {
+                                match &ident {
+                                    TokenTree::Ident(ident) => ident.to_string() == "ShaderGroup",
+                                    _ => false
+                                }
+                            })
+                            .unwrap_or(false);
+
+                        derive && is_group
+                    },
+                    _ => false
+                }
+            });
+
+            if is_group { globals.extend(convert_global_struct(item_struct, &counter)); }
+            else { structs.push(convert_non_global_struct(item_struct)); }
+        },
         
         syn::Item::Const(_item_const) => todo!(),
         syn::Item::Enum(_item_enum) => todo!(),
@@ -30,18 +57,56 @@ pub fn transpile(file: &syn::File) -> String {
 
     let mut output = String::new();
     let replacements = HashMap::new();
+    output.push_str(&ShaderElement::to_wgsl(&globals, &replacements, false));
+    output.push_str("\n");
     output.push_str(&ShaderElement::to_wgsl(&structs, &replacements, false));
+    output.push_str("\n");
     output.push_str(&ShaderElement::to_wgsl(&functions, &replacements, false));
     return output;
 }
 
-fn convert_struct(item: &syn::ItemStruct) -> ShaderElement {
+fn convert_non_global_struct(item: &syn::ItemStruct) -> ShaderElement {
     let name = item.ident.to_string();
     let params = item.fields.iter()
         .map(|field| convert_param(field))
         .collect::<Vec<_>>();
 
     ShaderElement::Struct { attrs: vec![], name, params }
+}
+
+fn convert_global_struct(item: &syn::ItemStruct, counter: &AtomicU32) -> Vec<ShaderElement> {
+    item.fields.iter()
+        .map(|field| convert_global(field, counter))
+        .collect()
+}
+
+fn convert_global(item: &syn::Field, counter: &AtomicU32) -> ShaderElement {
+    let binding = counter.fetch_add(1, Ordering::AcqRel);
+    let attrs = vec![
+        Attr { name: "group".to_string(), content: "0".to_string() },
+        Attr { name: "binding".to_string(), content: binding.to_string() }
+    ];
+
+    let name = item.ident
+        .as_ref()
+        .expect("Fields must be named for parameters")
+        .to_string();
+
+    let ty = convert_ty(&item.ty);
+
+    let mut declaration = Vec::new();
+    item.attrs.iter().for_each(|attr| {
+        match &attr.meta {
+            syn::Meta::Path(path) => {
+                let Some(path) = path.get_ident() else { return };
+                declaration.push(path.to_string());
+            },
+            _ => {}
+        }
+    });
+    let declared_as = format!("var<{}>", declaration.join(", "));
+
+    ShaderElement::Global { attrs, declared_as, name, ty }
 }
 
 fn convert_param(item: &syn::Field) -> Param {
@@ -54,7 +119,13 @@ fn convert_param(item: &syn::Field) -> Param {
         .filter_map(translate_attr)
         .collect::<Vec<_>>();
 
-    let ty = match &item.ty {
+    let ty = convert_ty(&item.ty);
+
+    Param { attrs, name, ty }
+}
+
+fn convert_ty(ty: &syn::Type) -> String {
+    match &ty {
         syn::Type::Path(type_path) => {
             let ident = type_path.path.segments.last()
                 .expect("Unnamed param path")
@@ -78,9 +149,7 @@ fn convert_param(item: &syn::Field) -> Param {
         syn::Type::Tuple(_type_tuple) => todo!(),
         syn::Type::Verbatim(_token_stream) => todo!(),
         _ => todo!(),
-    };
-
-    Param { attrs, name, ty }
+    }
 }
 
 fn translate_ty_name(name: &str) -> &str {

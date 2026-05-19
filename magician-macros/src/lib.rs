@@ -24,7 +24,7 @@ pub fn shader_layout(input: TokenStream) -> TokenStream {
     TokenStream::new()
 }
 
-#[proc_macro_derive(ShaderGroup, attributes(uniform))]
+#[proc_macro_derive(ShaderGroup, attributes(uniform, read, write))]
 pub fn shader_group(input: TokenStream) -> TokenStream {
     // decode input
     let input = parse_macro_input!(input as DeriveInput);
