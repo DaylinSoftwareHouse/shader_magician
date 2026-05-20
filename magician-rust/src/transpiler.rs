@@ -1,14 +1,13 @@
 use std::{collections::HashMap, sync::atomic::{AtomicU32, Ordering}};
 
 use magician_ast::*;
-use proc_macro2::TokenTree;
-use syn::{Expr, Lit};
 
 pub fn transpile(file: &syn::File) -> String {
     let counter = AtomicU32::new(0);
     let mut globals = Vec::new();
     let mut structs = Vec::new();
-    let functions = Vec::new();
+    let mut functions = Vec::new();
+    let mut global_struct_names = Vec::new();
 
     file.items.iter().for_each(|item| match &item {
         syn::Item::Struct(item_struct) => {
@@ -21,7 +20,7 @@ pub fn transpile(file: &syn::File) -> String {
                             .into_iter().next()
                             .map(|ident| {
                                 match &ident {
-                                    TokenTree::Ident(ident) => ident.to_string() == "ShaderGroup",
+                                    proc_macro2::TokenTree::Ident(ident) => ident.to_string() == "ShaderGroup",
                                     _ => false
                                 }
                             })
@@ -33,14 +32,18 @@ pub fn transpile(file: &syn::File) -> String {
                 }
             });
 
-            if is_group { globals.extend(convert_global_struct(item_struct, &counter)); }
-            else { structs.push(convert_non_global_struct(item_struct)); }
+            if is_group {
+                globals.extend(convert_global_struct(item_struct, &counter));
+                global_struct_names.push(item_struct.ident.to_string());
+            } else { 
+                structs.push(convert_non_global_struct(item_struct));
+            }
         },
         
         syn::Item::Const(_item_const) => todo!(),
         syn::Item::Enum(_item_enum) => todo!(),
         syn::Item::ExternCrate(_item_extern_crate) => todo!(),
-        syn::Item::Fn(_item_fn) => {}, //todo!(),
+        syn::Item::Fn(item_fn) => { functions.push(convert_function(item_fn, &global_struct_names)); }, //todo!(),
         syn::Item::ForeignMod(_item_foreign_mod) => todo!(),
         syn::Item::Impl(_item_impl) => todo!(),
         syn::Item::Macro(_item_macro) => todo!(),
@@ -63,6 +66,25 @@ pub fn transpile(file: &syn::File) -> String {
     output.push_str("\n");
     output.push_str(&ShaderElement::to_wgsl(&functions, &replacements, false));
     return output;
+}
+
+fn convert_function(item: &syn::ItemFn, struct_global_names: &[String]) -> ShaderElement {
+    let attrs = Vec::new();
+
+    let name = item.sig.ident.to_string();
+    let block = convert_block(&*item.block);
+    let params = item.sig.inputs.iter()
+        .filter(|fn_arg| match fn_arg {
+            syn::FnArg::Receiver(_) => true,
+            syn::FnArg::Typed(ty) => !struct_global_names.contains(&convert_ty(&ty.ty))
+        })
+        .map(convert_fn_arg).collect::<Vec<_>>();
+    let ret_ty = match &item.sig.output {
+        syn::ReturnType::Default => None,
+        syn::ReturnType::Type(_, ty) => Some(convert_ty(&*ty))
+    };
+
+    ShaderElement::Function { attrs, name, params, ret_ty, block, preprocessor_instructions: vec![] }
 }
 
 fn convert_non_global_struct(item: &syn::ItemStruct) -> ShaderElement {
@@ -109,6 +131,30 @@ fn convert_global(item: &syn::Field, counter: &AtomicU32) -> ShaderElement {
     ShaderElement::Global { attrs, declared_as, name, ty }
 }
 
+fn convert_fn_arg(item: &syn::FnArg) -> Param {
+    match item {
+        syn::FnArg::Receiver(receiver) => todo!("Receiver type {receiver:?}"),
+        syn::FnArg::Typed(item) => {
+            let name = match &*item.pat {
+                syn::Pat::Ident(ident) => ident.ident.to_string(),
+                _ => todo!("PatType handler for {item:?}")
+            };
+
+            let attrs = item.attrs.iter()
+                .filter_map(translate_attr)
+                .collect::<Vec<_>>();
+
+            let ty = convert_ty(&item.ty);
+
+            Param { attrs, name, ty }
+        }
+    }
+}
+
+fn convert_block(item: &syn::Block) -> Block {
+    Block { stmts: item.stmts.iter().map(convert_stmt).collect() }
+}
+
 fn convert_param(item: &syn::Field) -> Param {
     let name = item.ident
         .as_ref()
@@ -150,6 +196,10 @@ fn convert_ty(ty: &syn::Type) -> String {
         syn::Type::Verbatim(_token_stream) => todo!(),
         _ => todo!(),
     }
+}
+
+fn convert_stmt(stmt: &syn::Stmt) -> Statement {
+    todo!()
 }
 
 fn translate_ty_name(name: &str) -> &str {
@@ -198,15 +248,15 @@ fn translate_attr(attr: &syn::Attribute) -> Option<Attr> {
         "uniform" => Some(Attr { name: "uniform".to_string(), content: "".to_string() }), // todo
         "location" => {
             let Some(loc) = arguments else { panic!("Location attribute must have arguments") };
-            let Expr::Lit(loc) = loc else { panic!("Location attribute must have literal") };
-            let Lit::Int(loc) = &loc.lit else { panic!("Location attribute must have literal integer") };
+            let syn::Expr::Lit(loc) = loc else { panic!("Location attribute must have literal") };
+            let syn::Lit::Int(loc) = &loc.lit else { panic!("Location attribute must have literal integer") };
             let loc = loc.base10_parse::<u32>().expect("Failed to base10 parse location attribute literal integer");
             Some(Attr { name: "location".to_string(), content: loc.to_string() })
         },
         "builtin" => {
             let Some(loc) = arguments else { panic!("Builtin attribute must have arguments") };
-            let Expr::Lit(loc) = loc else { panic!("Builtin attribute must have literal") };
-            let Lit::Str(loc) = &loc.lit else { panic!("Builtin attribute must have literal string") };
+            let syn::Expr::Lit(loc) = loc else { panic!("Builtin attribute must have literal") };
+            let syn::Lit::Str(loc) = &loc.lit else { panic!("Builtin attribute must have literal string") };
             Some(Attr { name: "builtin".to_string(), content: loc.value() })
         },
         _ => None
