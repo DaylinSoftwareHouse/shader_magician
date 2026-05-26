@@ -2,6 +2,9 @@ use std::{collections::HashMap, sync::atomic::{AtomicU32, Ordering}};
 
 use magician_ast::*;
 
+pub(crate) mod expr;
+pub(crate) mod stmts;
+
 pub fn transpile(file: &syn::File) -> String {
     let counter = AtomicU32::new(0);
     let mut globals = Vec::new();
@@ -152,7 +155,8 @@ fn convert_fn_arg(item: &syn::FnArg) -> Param {
 }
 
 fn convert_block(item: &syn::Block) -> Block {
-    Block { stmts: item.stmts.iter().map(convert_stmt).collect() }
+    Block { stmts: item.stmts.iter().flat_map(stmts::convert_stmt).collect() }
+    // Block { stmts: vec![] }
 }
 
 fn convert_param(item: &syn::Field) -> Param {
@@ -198,10 +202,6 @@ fn convert_ty(ty: &syn::Type) -> String {
     }
 }
 
-fn convert_stmt(stmt: &syn::Stmt) -> Statement {
-    todo!()
-}
-
 fn translate_ty_name(name: &str) -> &str {
     match name {
         "Vec2" => "vec2<f32>",
@@ -219,6 +219,21 @@ fn translate_ty_name(name: &str) -> &str {
         "BVec2" => "vec2<bool>",
         "BVec3" => "vec3<bool>",
         "BVec4" => "vec4<bool>",
+        "Mat2" => "mat2<f32>",
+        "Mat3" => "mat3<f32>",
+        "Mat4" => "mat4<f32>",
+        "DMat2" => "mat2<f64>",
+        "DMat3" => "mat3<f64>",
+        "DMat4" => "mat4<f64>",
+        "IMat2" => "mat2<i32>",
+        "IMat3" => "mat3<i32>",
+        "IMat4" => "mat4<i32>",
+        "UMat2" => "mat2<u32>",
+        "UMat3" => "mat3<u32>",
+        "UMat4" => "mat4<u32>",
+        "BMat2" => "mat2<bool>",
+        "BMat3" => "mat3<bool>",
+        "BMat4" => "mat4<bool>",
         other => other
     }
 }
