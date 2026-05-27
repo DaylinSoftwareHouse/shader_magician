@@ -12,6 +12,7 @@ prettyplease = "0.2.37"
 glam = "0.32.1"
 derive_more = { version = "2.1.1", features = ["full"] }
 half = "2.7.1"
+ahash = "0.8.12"
 
 [build-dependencies]
 syn  = { version = "2", features = ["full", "visit", "extra-traits"] }
