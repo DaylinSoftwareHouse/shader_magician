@@ -3,6 +3,7 @@ use std::{collections::HashMap, sync::atomic::AtomicU32};
 use ahash::AHashMap;
 use global::*;
 use magician_ast::*;
+use naga::valid::{Capabilities, ValidationFlags, Validator};
 
 pub(crate) mod expr;
 pub(crate) mod global;
@@ -37,7 +38,7 @@ impl Transpiler {
         }
     }
 
-    pub fn transpile(mut self) -> String {
+    pub fn transpile_raw(mut self) -> String {
         let counter = AtomicU32::new(0);
 
         for item in &self.file.items {
@@ -109,5 +110,25 @@ impl Transpiler {
         output.push_str("\n");
         output.push_str(&ShaderElement::to_wgsl(&functions, &replacements, false));
         return output;
+    }
+
+    pub fn transpile_naga(self) -> Result<(naga::Module, naga::valid::ModuleInfo), Box<dyn std::error::Error>> {
+        let wgsl_str = self.transpile_raw();
+        let module = naga::front::wgsl::parse_str(&wgsl_str)
+            .map_err(|e| {
+                eprintln!("{}", e.emit_to_string(&wgsl_str));
+                e
+            })?;
+        let mut validator = Validator::new(ValidationFlags::all(), Capabilities::all());
+        let info = validator.validate(&module)?;
+        Ok((module, info))
+    }
+
+    pub fn transpile_wgsl(self) -> Result<String, Box<dyn std::error::Error>> {
+        let (module, info) = self.transpile_naga()?;
+        let mut out = String::new();
+        let mut writer = naga::back::wgsl::Writer::new(&mut out, naga::back::wgsl::WriterFlags::empty());
+        writer.write(&module, &info).expect("Failed to write WGSL");
+        Ok(out)
     }
 }

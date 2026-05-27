@@ -18,7 +18,8 @@ fn main() {
             std::fs::write(&out_path, tree.to_string_pretty()).unwrap();
 
             let transpiler = Transpiler::new(tree.file);
-            let wgsl = transpiler.transpile();
+            let wgsl = transpiler.transpile_wgsl()
+                .expect("Failed to transpile wgsl");
             let out_path = format!("./shader_out/{}.wgsl", fn_name);
             std::fs::write(&out_path, wgsl).unwrap();
         }
