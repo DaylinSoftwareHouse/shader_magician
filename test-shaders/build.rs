@@ -17,6 +17,9 @@ fn main() {
             let out_path = format!("./shader_out/extracted_{}.rs", fn_name);
             std::fs::write(&out_path, tree.to_string_pretty()).unwrap();
 
+            let out2_path = format!("./shader_out/extracted_{fn_name}.syntree");
+            std::fs::write(&out2_path, format!("{:#?}", tree.file)).unwrap();
+
             let transpiler = Transpiler::new(tree.file);
             let wgsl = transpiler.transpile_wgsl()
                 .expect("Failed to transpile wgsl");

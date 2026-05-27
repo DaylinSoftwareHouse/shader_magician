@@ -117,7 +117,13 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
             let args = expr_method_call.args.iter()
                 .filter_map(|a| convert_expr(transpiler, a))
                 .collect::<Vec<_>>();
-            Some(Expression::Call(Box::new(inner), args))
+            let method = expr_method_call.method.to_string();
+
+            let is_swizzle = method.len() <= 4 && 
+                method.chars().all(|a| a == 'x' || a == 'y' || a == 'z' || a == 'r' || a == 'g' || a == 'b');
+
+            if is_swizzle { Some(Expression::Field(Box::new(inner), method)) }
+            else { Some(Expression::Call(Box::new(Expression::Field(Box::new(inner), method)), args)) }
         },
 
         syn::Expr::Path(expr_path) => {
@@ -185,7 +191,7 @@ pub fn convert_pat_to_expr(transpiler: &Transpiler, pat: &syn::Pat) -> Option<Ex
     match pat {
         syn::Pat::Ident(pat_ident) => 
             Some(Expression::Identifier(pat_ident.ident.to_string())),
-            
+
         syn::Pat::Lit(expr_lit) => 
             match &expr_lit.lit {
                 syn::Lit::Byte(lit_byte) => Some(Expression::IntLiteral(lit_byte.value().to_string())),
