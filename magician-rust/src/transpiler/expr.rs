@@ -26,7 +26,7 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
         syn::Expr::Binary(expr_binary) => {
             // convert left and right side
             let left = convert_expr(transpiler, &*expr_binary.left);
-            let right = convert_expr(transpiler, &*expr_binary.left);
+            let right = convert_expr(transpiler, &*expr_binary.right);
 
             // convert binary operation
             let binop = match &expr_binary.op {
@@ -72,6 +72,7 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
                 Some(Expression::TypeConstruct(constructor, args))
             } else if func_name.len() > 0 {
                 let func_name = func_name[func_name.len() - 1].clone();
+                let func_name = convert_builtin_fn_names(&func_name);
                 Some(Expression::Call(Box::new(Expression::Identifier(func_name)), args))
             } else {
                 None
@@ -85,6 +86,13 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
                 syn::Member::Named(ident) => Some(ident.to_string()),
                 syn::Member::Unnamed(_index) => None
             };
+
+            if let Some(Expression::Identifier(identifier)) = &parent {
+                // todo!("Scanning global struct names {:?}", transpiler.global_struct_names);
+                if field.is_some() && transpiler.global_struct_names.contains(identifier) {
+                    return Some(Expression::Identifier(field.unwrap()))
+                }
+            }
 
             // return expression if parent and field where found
             if parent.is_some() && field.is_some() {
@@ -237,4 +245,17 @@ fn convert_constructor_name(segments: &[String]) -> Option<String> {
     }
 
     None
+}
+
+fn convert_builtin_fn_names(name: &str) -> String {
+    let tokens = name.split("_").collect::<Vec<_>>();
+    if tokens.len() != 2 { return name.to_string(); }
+
+    match tokens[1] {
+        "vec2" | "vec3" | "vec4" | "dvec3" | "dvec2" | "dvec4" |
+        "ivec2" | "ivec3" | "ivec4" | "uvec2" | "uvec3" | "uvec4" |
+        "bvec2" | "bvec3" | "bvec4" | "mat2" | "mat3" | "mat4" |
+        "dmat2" | "dmat3" | "dmat4" | "f32" | "u32" | "i32" => tokens[0].to_string(),
+        _ => name.to_string()
+    }
 }
