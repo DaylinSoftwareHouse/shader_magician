@@ -1,20 +1,40 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
+use ahash::AHashMap;
 use magician_ast::*;
 
 use crate::{TranspiledStruct, TranspiledStructField, Transpiler, stmts};
 
+#[derive(Default)]
+pub struct FunctionContext {
+    pub global_params: AHashMap<String, String> // param name -> param type
+}
+
 pub(crate) fn convert_function(transpiler: &Transpiler, item: &syn::ItemFn, struct_global_names: &[String]) -> (String, ShaderElement) {
     let attrs = Vec::new();
+    let mut func = FunctionContext::default();
 
     let name = item.sig.ident.to_string();
-    let block = convert_block(transpiler, &*item.block);
     let params = item.sig.inputs.iter()
         .filter(|fn_arg| match fn_arg {
             syn::FnArg::Receiver(_) => true,
-            syn::FnArg::Typed(ty) => !struct_global_names.contains(&convert_ty(&ty.ty))
+            syn::FnArg::Typed(pat) => {
+                let ty = convert_ty(&pat.ty);
+                let is_global = struct_global_names.contains(&ty);
+
+                if is_global {
+                    let name = match &*pat.pat {
+                        syn::Pat::Ident(ident) => ident.ident.to_string(),
+                        _ => todo!("PatType handler for {item:?}")
+                    };
+                    func.global_params.insert(name, ty);
+                }
+
+                !is_global
+            }
         })
         .map(convert_fn_arg).collect::<Vec<_>>();
+    let block = convert_block(transpiler, &func, &*item.block);
     let ret_ty = match &item.sig.output {
         syn::ReturnType::Default => None,
         syn::ReturnType::Type(_, ty) => Some(convert_ty(&*ty))
@@ -102,8 +122,8 @@ fn convert_fn_arg(item: &syn::FnArg) -> Param {
     }
 }
 
-fn convert_block(transpiler: &Transpiler, item: &syn::Block) -> Block {
-    Block { stmts: item.stmts.iter().flat_map(|a| stmts::convert_stmt(transpiler, a)).collect() }
+fn convert_block(transpiler: &Transpiler, func: &FunctionContext, item: &syn::Block) -> Block {
+    Block { stmts: item.stmts.iter().flat_map(|a| stmts::convert_stmt(transpiler, func, a)).collect() }
 }
 
 fn convert_param(item: &syn::Field) -> Param {

@@ -1,9 +1,9 @@
 use magician_ast::*;
 use syn::spanned::Spanned;
 
-use crate::{Transpiler, expr, global::convert_ty};
+use crate::{Transpiler, expr, global::{FunctionContext, convert_ty}};
 
-pub fn convert_stmt(transpiler: &Transpiler, item: &syn::Stmt) -> Vec<Statement> {
+pub fn convert_stmt(transpiler: &Transpiler, func: &FunctionContext, item: &syn::Stmt) -> Vec<Statement> {
     match &item {
         syn::Stmt::Local(local) => {
             // decode identifier, type, and mutability
@@ -29,7 +29,7 @@ pub fn convert_stmt(transpiler: &Transpiler, item: &syn::Stmt) -> Vec<Statement>
             let initializer = local.init.as_ref().map(|init| {
                 if init.diverge.is_some() { panic!("Diverging expression are not allowed in shader rust {:?} {:?}", local.span(), local) }
 
-                expr::convert_expr(transpiler, &*init.expr)
+                expr::convert_expr(transpiler, func, &*init.expr)
             }).flatten();
 
             // compose variable declaration
@@ -44,24 +44,24 @@ pub fn convert_stmt(transpiler: &Transpiler, item: &syn::Stmt) -> Vec<Statement>
         },
 
         syn::Stmt::Item(item) => todo!("Nested item support: {item:?}"),
-        syn::Stmt::Expr(expr, _semi) => convert_stmt_expr(transpiler, expr),
+        syn::Stmt::Expr(expr, _semi) => convert_stmt_expr(transpiler, func, expr),
         syn::Stmt::Macro(stmt_macro) => panic!("No macros allowed in shader functions {stmt_macro:?}"),
     }
 }
 
-pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<Statement> {
+pub fn convert_stmt_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn::Expr) -> Vec<Statement> {
     match item {
         syn::Expr::Break(_expr_break) => vec![Statement::Break],
         syn::Expr::Continue(_expr_continue) => vec![Statement::Continue],
         syn::Expr::Return(expr_return) => 
-            vec![Statement::Return(expr_return.expr.as_ref().map(|a| expr::convert_expr(transpiler, &*a)).flatten())],
+            vec![Statement::Return(expr_return.expr.as_ref().map(|a| expr::convert_expr(transpiler, func, &*a)).flatten())],
         
         syn::Expr::Assign(expr_assign) => {
             // convert left and right sides of expression
-            let left = expr::convert_expr(transpiler, &expr_assign.left)
+            let left = expr::convert_expr(transpiler, func, &expr_assign.left)
                 .map(|expr| expr::convert_expr_to_lvalue(transpiler, &expr))
                 .flatten();
-            let right = expr::convert_expr(transpiler, &expr_assign.right);
+            let right = expr::convert_expr(transpiler, func, &expr_assign.right);
 
             // optionally build final statement
             if left.is_some() && right.is_some() {
@@ -75,10 +75,10 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
 
         syn::Expr::Binary(expr_binary) => {
             // convert left and right sides of expression
-            let left = expr::convert_expr(transpiler, &expr_binary.left)
+            let left = expr::convert_expr(transpiler, func, &expr_binary.left)
                 .map(|expr| expr::convert_expr_to_lvalue(transpiler, &expr))
                 .flatten();
-            let right = expr::convert_expr(transpiler, &expr_binary.right);
+            let right = expr::convert_expr(transpiler, func, &expr_binary.right);
 
             // decode operation
             let binop = match &expr_binary.op {
@@ -109,7 +109,7 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
             let mut block = Vec::new();
 
             for stmt in &expr_block.block.stmts {
-                let stmts = convert_stmt(transpiler, stmt);
+                let stmts = convert_stmt(transpiler, func, stmt);
                 block.extend(stmts);
             }
 
@@ -137,7 +137,7 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
             };
 
             // decode initializer
-            let expr = expr::convert_expr(transpiler, &expr_let.expr);
+            let expr = expr::convert_expr(transpiler, func, &expr_let.expr);
 
             // compose variable declaration
             let decl = VarDecl {
@@ -153,11 +153,11 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
 
         syn::Expr::If(expr_if) => {
             // decode condition and body
-            let condition = expr::convert_expr(transpiler, &expr_if.cond)
+            let condition = expr::convert_expr(transpiler, func, &expr_if.cond)
                 .expect("Missing condition in if statement");
             let body = Block {
                 stmts: expr_if.then_branch.stmts.iter()
-                    .flat_map(|stmt| convert_stmt(transpiler, stmt))
+                    .flat_map(|stmt| convert_stmt(transpiler, func, stmt))
                     .collect()
             };
 
@@ -169,20 +169,21 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
                 else_ifs: &mut Vec<(Expression, Block)>,
                 else_body: &mut Option<Block>,
                 transpiler: &Transpiler, 
+                func: &FunctionContext,
                 expr: &syn::Expr
             ) {
                 match expr {
                     // find else ifs
                     syn::Expr::If(expr_if) => {
-                        let condition = expr::convert_expr(transpiler, &expr_if.cond)
+                        let condition = expr::convert_expr(transpiler, func, &expr_if.cond)
                             .expect("Missing condition in if statement");
                         let body = Block {
                             stmts: expr_if.then_branch.stmts.iter()
-                                .flat_map(|stmt| convert_stmt(transpiler, stmt))
+                                .flat_map(|stmt| convert_stmt(transpiler, func, stmt))
                                 .collect()
                         };
                         if let Some((_, else_expr)) = &expr_if.else_branch {
-                            recr_elses(else_ifs, else_body, transpiler, &*else_expr);
+                            recr_elses(else_ifs, else_body, transpiler, func, &*else_expr);
                         }
                         else_ifs.push((condition, body));
                     }
@@ -191,7 +192,7 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
                     syn::Expr::Block(block) => {
                         let body = Block {
                             stmts: block.block.stmts.iter()
-                                .flat_map(|stmt| convert_stmt(transpiler, stmt))
+                                .flat_map(|stmt| convert_stmt(transpiler, func, stmt))
                                 .collect()
                         };
                         *else_body = Some(body);
@@ -204,7 +205,7 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
 
             // start recr else searching
             if let Some((_, else_expr)) = &expr_if.else_branch {
-                recr_elses(&mut else_ifs, &mut else_body, transpiler, &*else_expr);
+                recr_elses(&mut else_ifs, &mut else_body, transpiler, func, &*else_expr);
             }
 
             // compile final if statement
@@ -212,11 +213,11 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
         },
 
         syn::Expr::While(expr_while) => {
-            let condition = expr::convert_expr(transpiler, &expr_while.cond)
+            let condition = expr::convert_expr(transpiler, func, &expr_while.cond)
                 .expect("Missing condition in if statement");
             let body = Block {
                 stmts: expr_while.body.stmts.iter()
-                    .flat_map(|stmt| convert_stmt(transpiler, stmt))
+                    .flat_map(|stmt| convert_stmt(transpiler, func, stmt))
                     .collect()
             };
             vec![Statement::While(WhileStatement { condition, body })]
@@ -225,14 +226,14 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
         syn::Expr::Loop(expr_loop) => {
             let body = Block {
                 stmts: expr_loop.body.stmts.iter()
-                    .flat_map(|stmt| convert_stmt(transpiler, stmt))
+                    .flat_map(|stmt| convert_stmt(transpiler, func, stmt))
                     .collect()
             };
             vec![Statement::Loop(LoopStatement { body, continuing: None })]
         },
 
         syn::Expr::Match(expr_match) => {
-            let Some(selector) = expr::convert_expr(transpiler, &*expr_match.expr)
+            let Some(selector) = expr::convert_expr(transpiler, func, &*expr_match.expr)
                 else { return vec![] };
 
             let cases = expr_match.arms.iter()
@@ -241,7 +242,7 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
                     let syn::Expr::Block(block) = &*case.body else { return None };
                     let body = Block {
                         stmts: block.block.stmts.iter()
-                            .flat_map(|stmt| convert_stmt(transpiler, stmt))
+                            .flat_map(|stmt| convert_stmt(transpiler, func, stmt))
                             .collect()
                     };
                     Some(SwitchCase { selectors: vec![selector], body })
@@ -252,7 +253,7 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, item: &syn::Expr) -> Vec<State
         },
         
         other => {
-            let Some(expression) = expr::convert_expr(transpiler, other)
+            let Some(expression) = expr::convert_expr(transpiler, func, other)
                 else { panic!("Unexported stmt expr: {item:?}") };
             vec![Statement::Expression(expression)]
         }

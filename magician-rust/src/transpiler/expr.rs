@@ -1,13 +1,13 @@
 use magician_ast::{BinaryOp, Expression, LValue, UnaryOp};
 
-use crate::Transpiler;
+use crate::{Transpiler, global::FunctionContext};
 
-pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Expression> {
+pub fn convert_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn::Expr) -> Option<Expression> {
     match item {
         syn::Expr::Unary(expr_unary) => {
             // decode expression
             let expr = 
-                convert_expr(transpiler, &*expr_unary.expr);
+                convert_expr(transpiler, func, &*expr_unary.expr);
 
             // decode unary operator
             let unary = match &expr_unary.op {
@@ -25,8 +25,8 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
 
         syn::Expr::Binary(expr_binary) => {
             // convert left and right side
-            let left = convert_expr(transpiler, &*expr_binary.left);
-            let right = convert_expr(transpiler, &*expr_binary.right);
+            let left = convert_expr(transpiler, func, &*expr_binary.left);
+            let right = convert_expr(transpiler, func, &*expr_binary.right);
 
             // convert binary operation
             let binop = match &expr_binary.op {
@@ -64,7 +64,7 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
 
             // decode arguments
             let args = expr_call.args.iter()
-                .filter_map(|a| convert_expr(transpiler, a))
+                .filter_map(|a| convert_expr(transpiler, func, a))
                 .collect::<Vec<_>>();
 
             // decode function call
@@ -81,15 +81,14 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
 
         syn::Expr::Field(expr_field) => {
             // convert parent and field
-            let parent = convert_expr(transpiler, &*expr_field.base);
+            let parent = convert_expr(transpiler, func, &*expr_field.base);
             let field = match &expr_field.member {
                 syn::Member::Named(ident) => Some(ident.to_string()),
                 syn::Member::Unnamed(_index) => None
             };
 
             if let Some(Expression::Identifier(identifier)) = &parent {
-                // todo!("Scanning global struct names {:?}", transpiler.global_struct_names);
-                if field.is_some() && transpiler.global_struct_names.contains(identifier) {
+                if field.is_some() && func.global_params.contains_key(identifier) {
                     return Some(Expression::Identifier(field.unwrap()))
                 }
             }
@@ -101,8 +100,8 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
         },
 
         syn::Expr::Index(expr_index) => {
-            let expr = convert_expr(transpiler, &*expr_index.expr);
-            let index = convert_expr(transpiler, &*expr_index.index);
+            let expr = convert_expr(transpiler, func, &*expr_index.expr);
+            let index = convert_expr(transpiler, func, &*expr_index.index);
 
             if expr.is_some() && index.is_some() {
                 Some(Expression::Index(Box::new(expr.unwrap()), Box::new(index.unwrap())))
@@ -120,10 +119,10 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
         },
 
         syn::Expr::MethodCall(expr_method_call) => {
-            let Some(inner) = convert_expr(transpiler, &*expr_method_call.receiver)
+            let Some(inner) = convert_expr(transpiler, func, &*expr_method_call.receiver)
                 else { panic!("Failed to get method: {:?}", expr_method_call) };
             let args = expr_method_call.args.iter()
-                .filter_map(|a| convert_expr(transpiler, a))
+                .filter_map(|a| convert_expr(transpiler, func, a))
                 .collect::<Vec<_>>();
             let method = expr_method_call.method.to_string();
 
@@ -160,7 +159,7 @@ pub fn convert_expr(transpiler: &Transpiler, item: &syn::Expr) -> Option<Express
                         else { panic!("Only named fields allow in struct builder!") };
                     let field_name = field_name.to_string();
 
-                    convert_expr(transpiler, &field.expr).map(|a| (field_name, a))
+                    convert_expr(transpiler, func, &field.expr).map(|a| (field_name, a))
                 })
                 .collect();
             fields.sort_by_key(|a| parent.fields.iter().position(|f| f.name == a.0));
