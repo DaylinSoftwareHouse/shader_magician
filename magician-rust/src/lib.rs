@@ -1,3 +1,4 @@
+pub mod build;
 pub mod index;
 pub mod math;
 pub mod resolver;
@@ -5,6 +6,7 @@ pub mod stitch;
 pub mod transpiler;
 pub mod visit;
 
+pub use build::*;
 pub use index::*;
 pub use math::*;
 pub use resolver::*;

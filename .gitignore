@@ -2,3 +2,4 @@
 *.lock
 out/
 shader_out/
+shader_dbg/
