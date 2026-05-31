@@ -1,5 +1,6 @@
 /target
 *.lock
 out/
+out-dir/
 shader_out/
 shader_dbg/

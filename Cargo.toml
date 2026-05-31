@@ -1,7 +1,10 @@
 [workspace]
 members = [
     "magician-ast",
+    "magician-macros",
     "magician-rust",
+    "magician-vgpu",
+    "test-learn-wgpu-12",
     "test-shaders"
 ]
 
