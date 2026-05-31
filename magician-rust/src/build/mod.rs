@@ -2,6 +2,16 @@ use std::path::PathBuf;
 
 use crate::*;
 
+pub mod index;
+pub mod resolver;
+pub mod stitch;
+pub mod visit;
+
+pub use index::*;
+pub use resolver::*;
+pub use stitch::*;
+pub use visit::*;
+
 pub fn build(
     src_root: PathBuf,
     out_path: PathBuf,
