@@ -8,6 +8,7 @@ edition = "2018"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+shaders = { path = "./shaders" }
 anyhow = "1.0"
 bytemuck = { version = "1.24", features = [ "derive" ] }
 cgmath = "0.18"

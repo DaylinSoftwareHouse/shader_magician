@@ -49,6 +49,12 @@ pub fn build(
             let mut b = dbg_path.clone();
             b.push(format!("extracted_{}.syntree", fn_name));
             std::fs::write(&b, format!("{:#?}", tree.file)).unwrap();
+        
+            let raw_translation = Transpiler::new(tree.file.clone());
+            let raw_wgsl = raw_translation.transpile_raw();
+            let mut c = dbg_path.clone();
+            c.push(format!("raw_wgsl_{}.wgsl", fn_name));
+            std::fs::write(&c, raw_wgsl).unwrap();
         }
 
         // execute transcompilation
