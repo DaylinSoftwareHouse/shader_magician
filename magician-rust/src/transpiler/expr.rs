@@ -127,7 +127,7 @@ pub fn convert_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn:
             let method = expr_method_call.method.to_string();
 
             let is_swizzle = method.len() <= 4 && 
-                method.chars().all(|a| a == 'x' || a == 'y' || a == 'z' || a == 'r' || a == 'g' || a == 'b');
+                method.chars().all(|a| a == 'x' || a == 'y' || a == 'z' || a == 'w' || a == 'r' || a == 'g' || a == 'b' || a == 'a');
 
             if is_swizzle { Some(Expression::Field(Box::new(inner), method)) }
             else { Some(Expression::Call(Box::new(Expression::Field(Box::new(inner), method)), args)) }
@@ -236,6 +236,8 @@ fn convert_constructor_name(segments: &[String]) -> Option<String> {
             "Mat2" | "DMat2" | "UMat2" | "IMat2" | "BMat2" => Some("mat2x2"), 
             "Mat3" | "DMat3" | "UMat3" | "IMat3" | "BMat3" => Some("mat3x3"), 
             "Mat4" | "DMat4" | "UMat4" | "IMat4" | "BMat4" => Some("mat4x4"),
+            "Texture2D" => Some("texture_2d<f32>"),
+            "Sampler" => Some("sampler"),
             _ => None
         };
 

@@ -46,6 +46,7 @@ pub struct InstanceInput {
 }
 
 
+#[allow(unused)]
 #[derive(ShaderLayout)]
 pub struct VertexOutput {
     #[builtin = "position"] clip_position: Vec4,
@@ -91,6 +92,7 @@ pub struct Material {
     s_normal: Sampler
 }
 
+#[allow(unused)]
 #[derive(ShaderLayout)]
 pub struct FragmentOutput {
     #[location = 0] color: Vec4
@@ -100,27 +102,27 @@ pub struct FragmentOutput {
 pub fn primary_fs_main(
     material: Material,
     light_in: LightInput,
-    cam_in: CameraInput,
     input: VertexOutput
 ) -> FragmentOutput {
-    let object_color = texture_sample(t_diffuse, s_diffuse, input.tex_coords);
-    let object_normal = texture_sample(t_normal, s_normal, input.tex_coords);
+    let object_color = textureSample(material.t_diffuse, material.s_diffuse, input.tex_coords);
+    let object_normal = textureSample(material.t_normal, material.s_normal, input.tex_coords);
 
     let ambient_strength = 0.1;
     let ambient_color = light_in.light.color * ambient_strength;
 
-    let tangent_normal = object_normal.xyz() * 2.0 - 1.0;
+    let tangent_normal = object_normal.xyz() * 2.0 - Vec3::new(1.0, 1.0, 1.0);
     let light_dir = normalize_vec3(input.tangent_light_position - input.tangent_position);
     let view_dir = normalize_vec3(input.tangent_view_position - input.tangent_position);
     let half_dir = normalize_vec3(view_dir + light_dir);
 
-    let diffuse_strength = max(dot_vec3(tangent_normal, light_dir), 0.0);
+    let diffuse_strength = max_f32(dot_vec3(tangent_normal, light_dir), 0.0);
     let diffuse_color = light_in.light.color * diffuse_strength;
 
-    let spec_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
+    let spec_strength = pow(max_f32(dot_vec3(tangent_normal, half_dir), 0.0), 32.0);
     let spec_color = spec_strength * light_in.light.color;
 
-    let result = (ambient_color + diffuse_color + spec_color) * object_color.xyz();
+    let color_sum = ambient_color + diffuse_color + spec_color;
+    let result = color_sum * object_color.xyz();
 
-    return FragmentOutput { color: Vec4::from_vec3_w(result, object_color.a) };
+    return FragmentOutput { color: Vec4::from_vec3_w(result, object_color.w()) };
 }

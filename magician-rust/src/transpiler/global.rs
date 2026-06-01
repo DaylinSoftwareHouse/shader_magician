@@ -97,7 +97,7 @@ pub(crate) fn convert_global(item: &syn::Field, counter: &AtomicU32) -> (String,
             _ => {}
         }
     });
-    let declared_as = format!("var<{}>", declaration.join(", "));
+    let declared_as = if declaration.is_empty() { "var".to_string() } else { format!("var<{}>", declaration.join(", ")) };
 
     (name.clone(), ShaderElement::Global { attrs, declared_as, name, ty })
 }
@@ -201,6 +201,8 @@ fn translate_ty_name(name: &str) -> &str {
         "BMat2" => "mat2x2<bool>",
         "BMat3" => "mat3x3<bool>",
         "BMat4" => "mat4x4<bool>",
+        "Texture2D" => "texture_2d<f32>",
+        "Sampler" => "sampler",
         other => other
     }
 }
