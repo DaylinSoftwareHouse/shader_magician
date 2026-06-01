@@ -7,7 +7,7 @@ pub struct ResolvedSet {
     pub ordered: Vec<Item>,
 }
 
-pub fn resolve(entry_fn: &syn::ItemFn, index: &ProjectIndex) -> ResolvedSet {
+pub fn resolve(fn_name: &String, entry_fn: &syn::ItemFn, index: &ProjectIndex) -> ResolvedSet {
     // BFS: queue of names to resolve
     let mut queue: VecDeque<String> = VecDeque::new();
     let mut visited: HashSet<String> = HashSet::new();
@@ -15,10 +15,9 @@ pub fn resolve(entry_fn: &syn::ItemFn, index: &ProjectIndex) -> ResolvedSet {
     let mut collected: HashMap<String, Item> = HashMap::new();
 
     // Seed from the entry function itself
-    let entry_name = entry_fn.sig.ident.to_string();
-    queue.push_back(entry_name.clone());
-    visited.insert(entry_name.clone());
-    collected.insert(entry_name, Item::Fn(entry_fn.clone()));
+    queue.push_back(fn_name.clone());
+    visited.insert(fn_name.clone());
+    collected.insert(fn_name.clone(), Item::Fn(entry_fn.clone()));
 
     while let Some(name) = queue.pop_front() {
         let item = match collected.get(&name).or_else(|| index.items.get(&name)) {
@@ -27,7 +26,7 @@ pub fn resolve(entry_fn: &syn::ItemFn, index: &ProjectIndex) -> ResolvedSet {
         };
 
         // Collect deps referenced by this item
-        let deps = deps_of_item(&item);
+        let deps = deps_of_item(find_segs(&name), &item);
 
         // Pull in impl blocks for any type we're including
         pull_impls(&name, index, &mut collected, &mut visited, &mut queue);
@@ -64,7 +63,7 @@ fn pull_impls(
                 visited.insert(key.clone());
                 collected.insert(key.clone(), impl_item.clone());
                 // impl blocks themselves may reference other types
-                let deps = deps_of_item(impl_item);
+                let deps = deps_of_item(find_segs(&key), impl_item);
                 for dep in deps {
                     if !visited.contains(&dep) {
                         queue.push_back(dep);
@@ -75,9 +74,9 @@ fn pull_impls(
     }
 }
 
-fn deps_of_item(item: &Item) -> HashSet<String> {
+fn deps_of_item(segs: Vec<String>, item: &Item) -> HashSet<String> {
     use syn::visit::Visit;
-    let mut c = IdentCollector::new();
+    let mut c = IdentCollector::new(segs);
     c.visit_item(item);
     c.found
 }
@@ -90,7 +89,7 @@ fn topo_sort(collected: HashMap<String, Item>) -> Vec<Item> {
     let mut in_edges: HashMap<String, HashSet<String>> = HashMap::new();
 
     for (name, item) in &collected {
-        let deps = deps_of_item(item)
+        let deps = deps_of_item(find_segs(name), item)
             .into_iter()
             .filter(|d| keys.contains(d) && d != name)
             .collect();
@@ -127,4 +126,11 @@ fn topo_sort(collected: HashMap<String, Item>) -> Vec<Item> {
     }
 
     result
+}
+
+fn find_segs(name: &String) -> Vec<String> {
+    let mut result = name.split("::").map(|a| a.to_string()).collect::<Vec<_>>();
+    if !result.is_empty() { result.remove(result.len() - 1); }
+    if result.len() >= 2 && result[0] == "crate" && result[1] == "crate" { result.remove(result.len() - 1); }
+    return result;
 }

@@ -1,5 +1,5 @@
 use std::{collections::HashMap, fs, path::{Path, PathBuf}};
-use syn::Item;
+use syn::{Ident, Item};
 
 /// A flat map of every named item across all .rs files in the project.
 /// impl blocks are stored separately because they have no single ident.
@@ -13,7 +13,7 @@ pub struct ProjectIndex {
 impl ProjectIndex {
     pub fn build(src_root: &Path) -> Self {
         let mut idx = Self::default();
-        walk(&mut idx, src_root);
+        walk(&mut idx, src_root, src_root);
         idx
     }
 
@@ -22,48 +22,48 @@ impl ProjectIndex {
     }
 }
 
-fn walk(idx: &mut ProjectIndex, dir: &Path) {
+fn walk(idx: &mut ProjectIndex, dir: &Path, root_dir: &Path) {
     let Ok(entries) = fs::read_dir(dir) else { return };
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            walk(idx, &path);
+            walk(idx, &path, root_dir);
         } else if path.extension().map_or(false, |e| e == "rs") {
-            index_file(idx, &path);
+            index_file(idx, &path, root_dir);
         }
     }
 }
 
-fn index_file(idx: &mut ProjectIndex, path: &PathBuf) {
+fn index_file(idx: &mut ProjectIndex, path: &PathBuf, root_dir: &Path) {
     let Ok(src) = fs::read_to_string(path) else { return };
     let Ok(file) = syn::parse_file(&src) else { return };
-    index_items(idx, file.items);
+    index_items(idx, file.items, path, root_dir);
 }
 
-fn index_items(idx: &mut ProjectIndex, items: Vec<Item>) {
+fn index_items(idx: &mut ProjectIndex, items: Vec<Item>, file_path: &PathBuf, root_dir: &Path) {
     for item in items {
         match &item {
-            Item::Fn(f)     => { idx.insert_item(f.sig.ident.to_string(), item); }
-            Item::Struct(s) => { idx.insert_item(s.ident.to_string(), item); }
-            Item::Enum(e)   => { idx.insert_item(e.ident.to_string(), item); }
-            Item::Trait(t)  => { idx.insert_item(t.ident.to_string(), item); }
-            Item::Type(t)   => { idx.insert_item(t.ident.to_string(), item); }
-            Item::Const(c)  => { idx.insert_item(c.ident.to_string(), item); }
-            Item::Static(s) => { idx.insert_item(s.ident.to_string(), item); }
+            Item::Fn(f)     => { idx.insert_item(extract_path(file_path, root_dir, &f.sig.ident), item); }
+            Item::Struct(s) => { idx.insert_item(extract_path(file_path, root_dir, &s.ident), item); }
+            Item::Enum(e)   => { idx.insert_item(extract_path(file_path, root_dir, &e.ident), item); }
+            Item::Trait(t)  => { idx.insert_item(extract_path(file_path, root_dir, &t.ident), item); }
+            Item::Type(t)   => { idx.insert_item(extract_path(file_path, root_dir, &t.ident), item); }
+            Item::Const(c)  => { idx.insert_item(extract_path(file_path, root_dir, &c.ident), item); }
+            Item::Static(s) => { idx.insert_item(extract_path(file_path, root_dir, &s.ident), item); }
             Item::Macro(m)  => {
                 if let Some(id) = &m.ident {
-                    idx.insert_item(id.to_string(), item);
+                    idx.insert_item(extract_path(file_path, root_dir, &id), item);
                 }
             }
             // impl blocks: bucket by the Self type name
             Item::Impl(i) => {
-                let type_name = extract_impl_type_name(i);
+                let type_name = extract_impl_type_name(i, file_path, root_dir);
                 idx.impls.entry(type_name).or_default().push(item);
             }
             // Recurse into inline modules
             Item::Mod(m) => {
                 if let Some((_, items)) = &m.content {
-                    index_items(idx, items.clone());
+                    index_items(idx, items.clone(), file_path, root_dir);
                 }
             }
             _ => {}
@@ -71,12 +71,54 @@ fn index_items(idx: &mut ProjectIndex, items: Vec<Item>) {
     }
 }
 
-fn extract_impl_type_name(i: &syn::ItemImpl) -> String {
+fn extract_impl_type_name(i: &syn::ItemImpl, file_path: &PathBuf, root_dir: &Path) -> String {
     // Strip references/boxes to get the base type name
     match i.self_ty.as_ref() {
         syn::Type::Path(tp) => tp.path.segments.last()
-            .map(|s| s.ident.to_string())
+            .map(|s| extract_path(file_path, root_dir, &s.ident))
             .unwrap_or_default(),
         _ => String::new(),
+    }
+}
+
+pub fn extract_path(
+    file_path: &PathBuf, 
+    root_dir: &Path, 
+    ident: &Ident
+) -> String {
+
+    // Strip the root dir prefix to get the relative path
+    let relative = file_path
+        .strip_prefix(root_dir)
+        .expect("file_path must be inside root_dir");
+
+    // Remove the .rs extension
+    let without_ext = relative.with_extension("");
+
+    // Convert path components to module segments
+    let segments: Vec<String> = without_ext
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+
+    // Handle lib.rs / main.rs → these ARE the crate root, so just "crate"
+    // Handle mod.rs → represents the parent module, drop the "mod" segment
+    let segments: Vec<String> = segments
+        .into_iter()
+        .filter_map(|seg| {
+            if seg == "lib" || seg == "main" {
+                None // crate root file, contributes no segment
+            } else if seg == "mod" {
+                None // mod.rs represents its parent dir, drop it
+            } else {
+                Some(seg)
+            }
+        })
+        .collect();
+    
+    if segments.is_empty() {
+        format!("crate::{}", ident.to_string())
+    } else {
+        format!("crate::{}::{}", segments.join("::"), ident.to_string())
     }
 }

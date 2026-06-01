@@ -37,8 +37,10 @@ pub fn build(
             else { continue };
 
         // build syntax tree for function
-        let resolved = resolver::resolve(entry_fn, &index);
+        let resolved = resolver::resolve(fn_name, entry_fn, &index);
         let tree = stitch::ExtractedTree::from_resolved(resolved);
+
+        let fn_name = fn_name.split("::").last().unwrap();
 
         // debug syntax tree if user asks for it
         if let Some(dbg_path) = &dbg_path {
@@ -71,11 +73,11 @@ pub fn build(
 
 fn read_targets(src_root: &std::path::Path) -> Vec<String> {
     let mut targets = Vec::new();
-    collect_shader_fns(src_root, &mut targets);
+    collect_shader_fns(src_root, src_root, &mut targets);
     targets
 }
 
-fn collect_shader_fns(dir: &std::path::Path, targets: &mut Vec<String>) {
+fn collect_shader_fns(dir: &std::path::Path, root_dir: &std::path::Path, targets: &mut Vec<String>) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(err) => {
@@ -87,14 +89,14 @@ fn collect_shader_fns(dir: &std::path::Path, targets: &mut Vec<String>) {
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
-            collect_shader_fns(&path, targets);
+            collect_shader_fns(&path, root_dir, targets);
         } else if path.extension().map_or(false, |e| e == "rs") {
-            collect_shader_fns_in_file(&path, targets);
+            collect_shader_fns_in_file(&path, root_dir, targets);
         }
     }
 }
 
-fn collect_shader_fns_in_file(path: &std::path::Path, targets: &mut Vec<String>) {
+fn collect_shader_fns_in_file(path: &std::path::Path, root_dir: &std::path::Path, targets: &mut Vec<String>) {
     let src = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(err) => {
@@ -115,6 +117,7 @@ fn collect_shader_fns_in_file(path: &std::path::Path, targets: &mut Vec<String>)
         if let syn::Item::Fn(f) = item {
             if has_shader_attr(f) {
                 targets.push(f.sig.ident.to_string());
+                targets.push(index::extract_path(&path.into(), root_dir, &f.sig.ident))
             }
         }
     }

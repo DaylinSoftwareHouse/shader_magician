@@ -1,3 +1,4 @@
-[ ] Fix false shared struct deps when common names involved (VertexInput, VertexOutput, etc)
+[x] Fix false shared struct deps when common names involved (VertexInput, VertexOutput, etc)
 [ ] Fix or add error for groups with items the same name as the function param
 [ ] Can we fix build failing cause rust-analyzer to fail?
+[ ] Texture processing
