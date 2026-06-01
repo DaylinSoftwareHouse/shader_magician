@@ -36,38 +36,55 @@ pub fn build(
         let Some(syn::Item::Fn(entry_fn)) = index.items.get(fn_name) 
             else { continue };
 
-        // build syntax tree for function
-        let resolved = resolver::resolve(fn_name, entry_fn, &index);
-        let tree = stitch::ExtractedTree::from_resolved(resolved);
+        let save_name = &fn_name.split("::").last().unwrap().to_string();
 
-        let fn_name = fn_name.split("::").last().unwrap();
+        let result = std::panic::catch_unwind(|| {
+            // build syntax tree for function
+            let resolved = resolver::resolve(fn_name, entry_fn, &index);
+            let tree = stitch::ExtractedTree::from_resolved(resolved);
 
-        // debug syntax tree if user asks for it
-        if let Some(dbg_path) = &dbg_path {
-            let mut a = dbg_path.clone();
-            a.push(format!("extracted_{}.rs", fn_name));
-            std::fs::write(&a, tree.to_string_pretty()).unwrap();
+            // debug syntax tree if user asks for it
+            if let Some(dbg_path) = &dbg_path {
+                let mut a = dbg_path.clone();
+                a.push(format!("extracted_{}.rs", save_name));
+                std::fs::write(&a, tree.to_string_pretty()).unwrap();
 
-            let mut b = dbg_path.clone();
-            b.push(format!("extracted_{}.syntree", fn_name));
-            std::fs::write(&b, format!("{:#?}", tree.file)).unwrap();
+                let mut b = dbg_path.clone();
+                b.push(format!("extracted_{}.syntree", save_name));
+                std::fs::write(&b, format!("{:#?}", tree.file)).unwrap();
+            
+                let raw_translation = Transpiler::new(tree.file.clone());
+                let raw_wgsl = raw_translation.transpile_raw();
+                let mut c = dbg_path.clone();
+                c.push(format!("raw_wgsl_{}.wgsl", save_name));
+                std::fs::write(&c, raw_wgsl).unwrap();
+            }
+
+            // execute transcompilation
+            let transpiler = Transpiler::new(tree.file);
+            let wgsl = transpiler.transpile_wgsl()
+                .expect("Failed to transpile wgsl");
+
+            return wgsl;
+        });
         
-            let raw_translation = Transpiler::new(tree.file.clone());
-            let raw_wgsl = raw_translation.transpile_raw();
-            let mut c = dbg_path.clone();
-            c.push(format!("raw_wgsl_{}.wgsl", fn_name));
-            std::fs::write(&c, raw_wgsl).unwrap();
-        }
-
-        // execute transcompilation
-        let transpiler = Transpiler::new(tree.file);
-        let wgsl = transpiler.transpile_wgsl()
-            .expect("Failed to transpile wgsl");
+        let content = 
+            if result.is_ok() { result.unwrap() } 
+            else {
+                let err = result.err().unwrap();
+                if let Some(msg) = err.downcast_ref::<&str>() {
+                    format!("ERROR\n{msg}")
+                } else if let Some(msg) = err.downcast_ref::<String>() {
+                    format!("ERROR\n{msg}")
+                } else {
+                    "ERROR\nUnknown".to_string()
+                }
+            };
 
         // save final shader
         let mut final_shader_path = out_path.clone();
-        final_shader_path.push(format!("{}.wgsl", fn_name));
-        std::fs::write(&final_shader_path, wgsl).unwrap();
+        final_shader_path.push(format!("{}.wgsl", save_name));
+        std::fs::write(&final_shader_path, content).unwrap();
     }
 }
 
