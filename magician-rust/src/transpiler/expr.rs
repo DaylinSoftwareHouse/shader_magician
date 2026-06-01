@@ -168,6 +168,11 @@ pub fn convert_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn:
             Some(Expression::TypeConstruct(ident, fields))
         },
 
+        syn::Expr::Paren(paren) => {
+            convert_expr(transpiler, func, &paren.expr)
+                .map(|expr| Expression::Paren(Box::new(expr)))
+        }
+
         syn::Expr::Tuple(expr_tuple) => todo!("Tuple support: {expr_tuple:?}"),
         syn::Expr::Infer(expr_infer) => todo!("Infered types: {expr_infer:?}"),
 

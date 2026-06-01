@@ -65,6 +65,7 @@ pub fn walk_expression<V: Visitor>(v: &mut V, expr: &Expression) {
         Expression::Field(b, _)        => v.visit_expression(b),
         Expression::Deref(e)           => v.visit_expression(e),
         Expression::AddrOf(e)          => v.visit_expression(e),
+        Expression::Paren(e)           => v.visit_expression(e),
         Expression::TypeConstruct(_, a)=> a.iter().for_each(|a| v.visit_expression(a)),
         // leaf nodes
         Expression::IntLiteral(_)
@@ -425,7 +426,8 @@ fn emit_expr(expr: &Expression) -> String {
         Expression::TypeConstruct(ty, args) => {
             let arg_str: Vec<_> = args.iter().map(emit_expr).collect();
             format!("{}({})", ty, arg_str.join(", "))
-        }
+        },
+        Expression::Paren(paren) => format!("({})", emit_expr(paren))
     }
 }
 

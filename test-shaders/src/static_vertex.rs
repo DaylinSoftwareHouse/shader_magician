@@ -34,7 +34,7 @@ pub struct VertexOutput {
     #[location = 4] pub mat_id: u32
 }
 
-#[shader]
+#[shader("./shader_out")]
 pub fn static_vertex_main(
     camera: CameraInput,
     model: VertexInput,

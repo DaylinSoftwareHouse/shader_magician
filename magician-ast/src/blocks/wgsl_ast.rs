@@ -193,6 +193,8 @@ pub enum Expression {
     Deref(Box<Expression>),
     /// `&expr`  (address-of)
     AddrOf(Box<Expression>),
+    /// `(expr)`
+    Paren(Box<Expression>),
 
     /// `type_name(args…)` — explicit type constructor / bitcast / etc.
     TypeConstruct(String, Vec<Expression>),

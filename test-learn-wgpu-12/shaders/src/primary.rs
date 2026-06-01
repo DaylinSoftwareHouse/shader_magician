@@ -121,8 +121,7 @@ pub fn primary_fs_main(
     let spec_strength = pow(max_f32(dot_vec3(tangent_normal, half_dir), 0.0), 32.0);
     let spec_color = spec_strength * light_in.light.color;
 
-    let color_sum = ambient_color + diffuse_color + spec_color;
-    let result = color_sum * object_color.xyz();
+    let result = (ambient_color + diffuse_color + spec_color) * object_color.xyz();
 
     return FragmentOutput { color: Vec4::from_vec3_w(result, object_color.w()) };
 }
