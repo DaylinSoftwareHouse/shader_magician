@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 magician-rust = { path = "../magician-rust" }
+
+getset = "0.1.6"
+wgpu = { version = "29.0"}
+winit = { version = "0.30", features = ["android-native-activity"] }
