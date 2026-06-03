@@ -71,7 +71,6 @@ pub fn build(
         let content = 
             if result.is_ok() { result.unwrap() } 
             else {
-                result.as_ref().unwrap();
                 let err = result.err().unwrap();
                 if let Some(msg) = err.downcast_ref::<&str>() {
                     format!("ERROR\n{msg}")

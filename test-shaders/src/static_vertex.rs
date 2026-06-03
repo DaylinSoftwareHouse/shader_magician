@@ -1,5 +1,4 @@
-use magician_macros::{ShaderGroup, ShaderLayout, shader};
-use magician_rust::{Vec2, Vec3, Vec4, Mat3, Mat4, normalize_vec3};
+use magician_rust::{Mat3, Mat4, Vec2, Vec3, Vec4, macros::{ShaderGroup, ShaderLayout, shader}, normalize_vec3};
 
 use crate::textures::test_sample;
 

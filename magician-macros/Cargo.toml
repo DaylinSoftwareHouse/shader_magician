@@ -7,7 +7,6 @@ edition = "2024"
 proc-macro = true
 
 [dependencies]
-magician-rust = { path = "../magician-rust" }
-syn   = { version = "2", features = ["full", "visit", "extra-traits"] }
+syn = { version = "2", features = ["full", "visit", "extra-traits"] }
 quote = "1"
 proc-macro2 = "1"

@@ -11,3 +11,4 @@ pub use textures::*;
 pub use transpiler::*;
 
 pub use magician_ast as ast;
+pub use magician_macros as macros;
