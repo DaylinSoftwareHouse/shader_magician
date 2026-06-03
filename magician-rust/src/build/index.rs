@@ -6,8 +6,8 @@ use syn::{Ident, Item};
 #[derive(Default)]
 pub struct ProjectIndex {
     pub items: HashMap<String, Item>,
-    /// impl blocks keyed by the type name they implement
     pub impls: HashMap<String, Vec<Item>>,
+    pub uses: HashMap<String, String> // name -> path
 }
 
 impl ProjectIndex {
@@ -43,6 +43,33 @@ fn index_file(idx: &mut ProjectIndex, path: &PathBuf, root_dir: &Path) {
 fn index_items(idx: &mut ProjectIndex, items: Vec<Item>, file_path: &PathBuf, root_dir: &Path) {
     for item in items {
         match &item {
+            Item::Use(u) => { 
+                fn recr_tree(idx: &mut ProjectIndex, item: syn::UseTree, segs: &[String]) {
+                    match &item {
+                        syn::UseTree::Path(use_path) => {
+                            let name = use_path.ident.to_string();
+                            if name.starts_with("magician_") { return }
+                            let mut segs = segs.to_vec();
+                            segs.push(name);
+                            recr_tree(idx, *use_path.tree.clone(), &segs);
+                        },
+                        syn::UseTree::Group(use_group) => {
+                            for item in &use_group.items {
+                                recr_tree(idx, item.clone(), segs);
+                            }
+                        },
+                        syn::UseTree::Name(use_name) => {
+                            let mut segs = segs.to_vec();
+                            segs.push(use_name.ident.to_string());
+                            idx.uses.insert(use_name.ident.to_string(), segs.join("::"));
+                        },
+                        syn::UseTree::Rename(_use_rename) => todo!("Use rename support"),
+                        syn::UseTree::Glob(_use_glob) => todo!("Use glob support"),
+                    }
+                }
+
+                recr_tree(idx, u.tree.clone(), &[]);
+            }
             Item::Fn(f)     => { idx.insert_item(extract_path(file_path, root_dir, &f.sig.ident), item); }
             Item::Struct(s) => { idx.insert_item(extract_path(file_path, root_dir, &s.ident), item); }
             Item::Enum(e)   => { idx.insert_item(extract_path(file_path, root_dir, &e.ident), item); }

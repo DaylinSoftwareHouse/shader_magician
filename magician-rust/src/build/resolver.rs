@@ -26,7 +26,7 @@ pub fn resolve(fn_name: &String, entry_fn: &syn::ItemFn, index: &ProjectIndex) -
         };
 
         // Collect deps referenced by this item
-        let deps = deps_of_item(find_segs(&name), &item);
+        let deps = deps_of_item(find_segs(&name), &item, index);
 
         // Pull in impl blocks for any type we're including
         pull_impls(&name, index, &mut collected, &mut visited, &mut queue);
@@ -45,7 +45,7 @@ pub fn resolve(fn_name: &String, entry_fn: &syn::ItemFn, index: &ProjectIndex) -
     }
 
     // Topological sort so deps come before the things that use them
-    let ordered = topo_sort(collected);
+    let ordered = topo_sort(collected, index);
     ResolvedSet { ordered }
 }
 
@@ -63,7 +63,7 @@ fn pull_impls(
                 visited.insert(key.clone());
                 collected.insert(key.clone(), impl_item.clone());
                 // impl blocks themselves may reference other types
-                let deps = deps_of_item(find_segs(&key), impl_item);
+                let deps = deps_of_item(find_segs(&key), impl_item, index);
                 for dep in deps {
                     if !visited.contains(&dep) {
                         queue.push_back(dep);
@@ -74,22 +74,22 @@ fn pull_impls(
     }
 }
 
-fn deps_of_item(segs: Vec<String>, item: &Item) -> HashSet<String> {
+fn deps_of_item(segs: Vec<String>, item: &Item, idx: &ProjectIndex) -> HashSet<String> {
     use syn::visit::Visit;
-    let mut c = IdentCollector::new(segs);
+    let mut c = IdentCollector::new(segs, idx);
     c.visit_item(item);
     c.found
 }
 
 /// Simple Kahn's algorithm over the collected items.
 /// Items with no deps among the set come first.
-fn topo_sort(collected: HashMap<String, Item>) -> Vec<Item> {
+fn topo_sort(collected: HashMap<String, Item>, idx: &ProjectIndex) -> Vec<Item> {
     // Build adjacency: name -> set of names it depends on (within collected)
     let keys: HashSet<String> = collected.keys().cloned().collect();
     let mut in_edges: HashMap<String, HashSet<String>> = HashMap::new();
 
     for (name, item) in &collected {
-        let deps = deps_of_item(find_segs(name), item)
+        let deps = deps_of_item(find_segs(name), item, idx)
             .into_iter()
             .filter(|d| keys.contains(d) && d != name)
             .collect();
