@@ -2,6 +2,10 @@ use std::sync::Arc;
 
 use getset::{Getters, MutGetters};
 
+pub mod frame;
+
+pub use frame::*;
+
 #[derive(Getters, MutGetters)]
 pub struct VirtualGpu {
     #[getset(get = "pub", get_mut = "pub")]

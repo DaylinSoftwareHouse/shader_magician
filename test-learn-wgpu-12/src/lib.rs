@@ -1,8 +1,8 @@
 use std::sync::Arc;
-use std::{f32::consts::PI, iter};
+use std::f32::consts::PI;
 
 use cgmath::prelude::*;
-use magician_vgpu::VirtualGpu;
+use magician_vgpu::{RenderFrame, VirtualGpu};
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
@@ -543,51 +543,13 @@ impl State {
     }
 
     fn render(&mut self) -> anyhow::Result<()> {
-        self.vgpu.window().request_redraw();
-
-        // We can't render unless the surface is configured
-        if !self.is_surface_configured {
-            return Ok(());
-        }
-
-        let output = match self.vgpu.surface().get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
-            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
-                self.vgpu.surface().configure(&self.vgpu.device(), &self.vgpu.config());
-                surface_texture
-            }
-            wgpu::CurrentSurfaceTexture::Timeout
-            | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => {
-                // Skip this frame
-                return Ok(());
-            }
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                self.vgpu.surface().configure(&self.vgpu.device(), &self.vgpu.config());
-                return Ok(());
-            }
-            wgpu::CurrentSurfaceTexture::Lost => {
-                // You could recreate the devices and all resources
-                // created with it here, but we'll just bail
-                anyhow::bail!("Lost device");
-            }
-        };
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-
-        let mut encoder = self
-            .vgpu
-            .device()
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+        let Some(mut frame) = RenderFrame::begin(&self.vgpu)?
+            else { return Ok(()) };
 
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+            let color_attachments = [
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &frame.view().clone(),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -599,15 +561,23 @@ impl State {
                         store: wgpu::StoreOp::Store,
                     },
                     depth_slice: None,
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                })
+            ];
+
+            let depth_stencil_attachment = 
+                wgpu::RenderPassDepthStencilAttachment {
                     view: &self.depth_texture.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
                         store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
-                }),
+                };
+
+            let mut render_pass = frame.encoder_mut().begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &color_attachments,
+                depth_stencil_attachment: Some(depth_stencil_attachment),
                 occlusion_query_set: None,
                 timestamp_writes: None,
                 multiview_mask: None,
@@ -629,8 +599,8 @@ impl State {
                 &self.light_bind_group,
             );
         }
-        self.vgpu.queue().submit(iter::once(encoder.finish()));
-        output.present();
+
+        frame.submit(&self.vgpu);
 
         Ok(())
     }
