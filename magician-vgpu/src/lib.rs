@@ -2,9 +2,16 @@ use std::sync::Arc;
 
 use getset::{Getters, MutGetters};
 
+pub mod attachments;
 pub mod frame;
+pub mod pass;
 
+pub use attachments::*;
 pub use frame::*;
+pub use pass::*;
+
+pub use magician_rust as magician_rust;
+pub use magician_rust::glam as glam;
 
 #[derive(Getters, MutGetters)]
 pub struct VirtualGpu {

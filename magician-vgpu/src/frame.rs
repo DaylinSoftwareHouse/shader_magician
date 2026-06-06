@@ -1,19 +1,22 @@
 use anyhow::Ok;
 use getset::{Getters, MutGetters};
+use magician_rust::glam::Vec4;
 
-use crate::VirtualGpu;
+use crate::{PassAttachment, SinglePass, VirtualGpu};
 
 #[derive(Getters, MutGetters)]
-pub struct RenderFrame {
+pub struct RenderFrame<'a> {
     #[getset(get = "pub", get_mut = "pub")]
     output: wgpu::SurfaceTexture,
     #[getset(get = "pub", get_mut = "pub")]
     view: wgpu::TextureView,
     #[getset(get = "pub", get_mut = "pub")]
-    encoder: wgpu::CommandEncoder
+    encoder: wgpu::CommandEncoder,
+
+    pub(crate) vgpu: &'a VirtualGpu
 }
 
-impl RenderFrame {
+impl <'a> RenderFrame<'a> {
     /// Start a render frame from a reference to a virtual GPU.
     /// This creates a new `RenderFrame` instance that may be used
     /// for rendering your next frame.
@@ -27,7 +30,7 @@ impl RenderFrame {
     ///         VirtualGpu is still loading asychronously in the background.
     ///   - An error value if the VirtualGpu is in an illegal state that
     ///         does not allow the frame to be created.
-    pub fn begin(vgpu: &VirtualGpu) -> anyhow::Result<Option<Self>> {
+    pub fn begin(vgpu: &'a VirtualGpu) -> anyhow::Result<Option<Self>> {
         vgpu.window().request_redraw();
         if !vgpu.config().width < 1 { return Ok(None); }
 
@@ -63,13 +66,39 @@ impl RenderFrame {
                 label: Some("Render Encoder"),
             });
         
-        Ok(Some(Self { output, view, encoder }))
+        Ok(Some(Self { output, view, encoder, vgpu }))
+    }
+
+    pub fn init_pass<'b>(
+        &'b mut self,
+        color_attachments: &[PassAttachment<Vec4>],
+        depth_attachment: Option<PassAttachment<f32>>
+    ) -> SinglePass<'b> {
+        let color_attachments = 
+            color_attachments.into_iter()
+            .map(|a| Some(a.as_color_attachment()))
+            .collect::<Vec<_>>();
+
+        let depth_stencil_attachment = 
+            depth_attachment.as_ref().map(PassAttachment::as_depth_attachment);
+
+        let pass = self
+            .encoder_mut()
+            .begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &color_attachments,
+                depth_stencil_attachment,
+                occlusion_query_set: None,
+                timestamp_writes: None,
+                multiview_mask: None,
+            });
+        SinglePass::new(pass)
     }
 
     /// Submit this frame for rendering/use by the GPU.  This will consume
     /// this frame, effectively ending it.
-    pub fn submit(self, vgpu: &VirtualGpu) {
-        vgpu.queue().submit(std::iter::once(self.encoder.finish()));
+    pub fn submit(self) {
+        self.vgpu.queue().submit(std::iter::once(self.encoder.finish()));
         self.output.present();
     }
 }

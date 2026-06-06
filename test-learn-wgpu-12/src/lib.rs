@@ -2,7 +2,9 @@ use std::sync::Arc;
 use std::f32::consts::PI;
 
 use cgmath::prelude::*;
-use magician_vgpu::{RenderFrame, VirtualGpu};
+use magician_vgpu::glam::Vec4;
+use magician_vgpu::{LoadOp, PassAttachment, RenderFrame, StoreOp, VirtualGpu};
+use model::{DrawLight, DrawModel, Vertex};
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
@@ -14,14 +16,15 @@ use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use winit::platform::web::EventLoopExtWebSys;
 
+
 mod camera;
 mod model;
 mod resources;
 mod texture;
 
-use model::{DrawLight, DrawModel, Vertex};
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
+
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -547,52 +550,31 @@ impl State {
             else { return Ok(()) };
 
         {
-            let color_attachments = [
-                Some(wgpu::RenderPassColorAttachment {
-                    view: &frame.view().clone(),
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
+            let mut pass = frame.init_pass(
+                &[
+                    PassAttachment {
+                        view: frame.view().clone(),
+                        load_op: LoadOp::Clear(Vec4::new(0.1, 0.2, 0.3, 1.0)),
+                        store_op: StoreOp::Store
+                    }
+                ], 
+                Some(PassAttachment { 
+                    view: self.depth_texture.view.clone(), 
+                    load_op: LoadOp::Clear(1.0), 
+                    store_op: StoreOp::Store
                 })
-            ];
+            );
 
-            let depth_stencil_attachment = 
-                wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                };
-
-            let mut render_pass = frame.encoder_mut().begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &color_attachments,
-                depth_stencil_attachment: Some(depth_stencil_attachment),
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
-
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass.set_pipeline(&self.light_render_pipeline);
-            render_pass.draw_light_model(
+            pass.pass_mut().set_vertex_buffer(1, self.instance_buffer.slice(..));
+            pass.pass_mut().set_pipeline(&self.light_render_pipeline);
+            pass.pass_mut().draw_light_model(
                 &self.obj_model,
                 &self.camera_bind_group,
                 &self.light_bind_group,
             );
 
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw_model_instanced(
+            pass.pass_mut().set_pipeline(&self.render_pipeline);
+            pass.pass_mut().draw_model_instanced(
                 &self.obj_model,
                 0..self.instances.len() as u32,
                 &self.camera_bind_group,
@@ -600,7 +582,7 @@ impl State {
             );
         }
 
-        frame.submit(&self.vgpu);
+        frame.submit();
 
         Ok(())
     }
