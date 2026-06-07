@@ -149,7 +149,7 @@ pub struct State {
     camera_bind_group: wgpu::BindGroup,
     instances: Vec<Instance>,
     #[allow(dead_code)]
-    instance_buffer: ImmutableBuffer<[InstanceRaw; 100]>,
+    instance_buffer: ImmutableBuffer<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>,
     depth_texture: magician_vgpu::StaticTexture,
     is_surface_configured: bool,
     light_uniform: LightUniform,
