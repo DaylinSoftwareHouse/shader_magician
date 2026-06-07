@@ -5,10 +5,12 @@ use getset::{Getters, MutGetters};
 pub mod attachments;
 pub mod frame;
 pub mod pass;
+pub mod textures;
 
 pub use attachments::*;
 pub use frame::*;
 pub use pass::*;
+pub use textures::*;
 
 pub use magician_rust as magician_rust;
 pub use magician_rust::glam as glam;
