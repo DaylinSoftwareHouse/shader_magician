@@ -3,7 +3,7 @@ use std::f32::consts::PI;
 
 use cgmath::prelude::*;
 use magician_vgpu::glam::Vec4;
-use magician_vgpu::{LoadOp, PassAttachment, RenderFrame, StoreOp, VirtualGpu};
+use magician_vgpu::{LoadOp, PassAttachment, PassTarget, RenderFrame, StoreOp, VirtualGpu};
 use model::{DrawLight, DrawModel, Vertex};
 use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
@@ -150,7 +150,7 @@ pub struct State {
     instances: Vec<Instance>,
     #[allow(dead_code)]
     instance_buffer: wgpu::Buffer,
-    depth_texture: texture::Texture,
+    depth_texture: magician_vgpu::StaticTexture,
     is_surface_configured: bool,
     light_uniform: LightUniform,
     light_buffer: wgpu::Buffer,
@@ -377,8 +377,12 @@ impl State {
             label: None,
         });
 
-        let depth_texture =
-            texture::Texture::create_depth_texture(vgpu.device(), vgpu.config(), "depth_texture");
+        let depth_texture = texture::Texture::create_depth_texture(
+            vgpu.device(), 
+            vgpu.config(), 
+            "depth_texture"
+        );
+        let depth_texture = magician_vgpu::StaticTexture::new(depth_texture.texture, depth_texture.view, depth_texture.sampler);
 
         let render_pipeline_layout =
             vgpu.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -492,8 +496,13 @@ impl State {
             self.vgpu.config_mut().width = width;
             self.vgpu.config_mut().height = height;
             self.vgpu.surface().configure(self.vgpu.device(), self.vgpu.config());
-            self.depth_texture =
-                texture::Texture::create_depth_texture(self.vgpu.device(), self.vgpu.config(), "depth_texture");
+            
+            let depth_texture = texture::Texture::create_depth_texture(
+                self.vgpu.device(), 
+                self.vgpu.config(), 
+                "depth_texture"
+            );
+            self.depth_texture = magician_vgpu::StaticTexture::new(depth_texture.texture, depth_texture.view, depth_texture.sampler);
         }
     }
 
@@ -553,13 +562,13 @@ impl State {
             let mut pass = frame.init_pass(
                 &[
                     PassAttachment {
-                        view: frame.view().clone(),
+                        target: PassTarget::PassOutput,
                         load_op: LoadOp::Clear(Vec4::new(0.1, 0.2, 0.3, 1.0)),
                         store_op: StoreOp::Store
                     }
                 ], 
                 Some(PassAttachment { 
-                    view: self.depth_texture.view.clone(), 
+                    target: PassTarget::Texture(&self.depth_texture),
                     load_op: LoadOp::Clear(1.0), 
                     store_op: StoreOp::Store
                 })

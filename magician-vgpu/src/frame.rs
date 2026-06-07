@@ -74,13 +74,14 @@ impl <'a> RenderFrame<'a> {
         color_attachments: &[PassAttachment<Vec4>],
         depth_attachment: Option<PassAttachment<f32>>
     ) -> SinglePass<'b> {
+        let frame_output = self.view().clone();
         let color_attachments = 
             color_attachments.into_iter()
-            .map(|a| Some(a.as_color_attachment()))
+            .map(|a| Some(a.as_color_attachment(&frame_output)))
             .collect::<Vec<_>>();
 
         let depth_stencil_attachment = 
-            depth_attachment.as_ref().map(PassAttachment::as_depth_attachment);
+            depth_attachment.as_ref().map(|a| a.as_depth_attachment(&frame_output));
 
         let pass = self
             .encoder_mut()
