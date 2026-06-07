@@ -1,8 +1,10 @@
 use crate::VirtualGpu;
 
+pub mod dynamic;
 pub mod immutable;
 pub mod mutable;
 
+pub use dynamic::*;
 pub use immutable::*;
 pub use mutable::*;
 
