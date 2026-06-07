@@ -1,11 +1,9 @@
-use std::convert::TryInto;
-use std::sync::Arc;
-use std::f32::consts::PI;
+use std::{convert::TryInto, sync::Arc};
 
-use cgmath::prelude::*;
-use magician_vgpu::glam::Vec4;
+use magician_vgpu::glam::{Mat3A, Mat4, Quat, Vec3, Vec4};
 use magician_vgpu::{Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, RenderFrame, StoreOp, VirtualGpu, WritableBuffer};
 use model::{DrawLight, DrawModel, Vertex};
+use shaders::primary::{Camera, Light};
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
@@ -26,40 +24,23 @@ mod texture;
 const NUM_INSTANCES_PER_ROW: usize = 10;
 
 
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    view_position: [f32; 4],
-    view_proj: [[f32; 4]; 4],
-}
+fn build_camera_from_projection(camera: &camera::Camera, projection: &camera::Projection) -> Camera {
+    let view_position = camera.position.to_homogeneous().into();
+    let view_proj: [[f32; 4]; 4] = (projection.calc_matrix() * camera.calc_matrix()).into();
 
-impl CameraUniform {
-    fn new() -> Self {
-        Self {
-            view_position: [0.0; 4],
-            view_proj: cgmath::Matrix4::identity().into(),
-        }
-    }
-
-    
-    fn update_view_proj(&mut self, camera: &camera::Camera, projection: &camera::Projection) {
-        self.view_position = camera.position.to_homogeneous().into();
-        self.view_proj = (projection.calc_matrix() * camera.calc_matrix()).into()
-    }
+    Camera { view_pos: Vec4::from_array(view_position).into(), view_proj: Mat4::from_cols_array_2d(&view_proj).into() }
 }
 
 struct Instance {
-    position: cgmath::Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
+    position: Vec3,
+    rotation: Quat,
 }
 
 impl Instance {
     fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
-            model: (cgmath::Matrix4::from_translation(self.position)
-                * cgmath::Matrix4::from(self.rotation))
-            .into(),
-            normal: cgmath::Matrix3::from(self.rotation).into(),
+            model: Mat4::from_rotation_translation(self.rotation, self.position),
+            normal: Mat3A::from_quat(self.rotation)
         }
     }
 }
@@ -68,8 +49,8 @@ impl Instance {
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 #[allow(dead_code)]
 struct InstanceRaw {
-    model: [[f32; 4]; 4],
-    normal: [[f32; 3]; 3],
+    model: Mat4,
+    normal: Mat3A
 }
 
 impl model::Vertex for InstanceRaw {
@@ -126,16 +107,6 @@ impl model::Vertex for InstanceRaw {
     }
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct LightUniform {
-    position: [f32; 3],
-    // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
-    _padding: u32,
-    color: [f32; 3],
-    _padding2: u32,
-}
-
 pub struct State {
     vgpu: VirtualGpu,
 
@@ -144,16 +115,16 @@ pub struct State {
     camera: camera::Camera,                      
     projection: camera::Projection,              
     camera_controller: camera::CameraController, 
-    camera_uniform: CameraUniform,
-    camera_buffer: MutableBuffer<CameraUniform>,
+    camera_uniform: Camera,
+    camera_buffer: MutableBuffer<Camera>,
     camera_bind_group: wgpu::BindGroup,
     instances: Vec<Instance>,
     #[allow(dead_code)]
     instance_buffer: ImmutableBuffer<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>,
     depth_texture: magician_vgpu::StaticTexture,
     is_surface_configured: bool,
-    light_uniform: LightUniform,
-    light_buffer: MutableBuffer<LightUniform>,
+    light_uniform: Light,
+    light_buffer: MutableBuffer<Light>,
     light_bind_group: wgpu::BindGroup,
     light_render_pipeline: wgpu::RenderPipeline,
     #[allow(dead_code)]
@@ -273,10 +244,11 @@ impl State {
         let projection =
             camera::Projection::new(vgpu.config().width, vgpu.config().height, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera::CameraController::new(4.0, 0.4);
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera, &projection);
+        // let mut camera_uniform = Camera::new();
+        // camera_uniform.update_view_proj(&camera, &projection);
+        let camera_uniform = build_camera_from_projection(&camera, &projection);
         let camera_buffer = MutableBuffer
-            ::<CameraUniform>
+            ::<Camera>
             ::new(&vgpu, camera_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
 
         const SPACE_BETWEEN: f32 = 3.0;
@@ -286,15 +258,12 @@ impl State {
                     let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
                     let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
 
-                    let position = cgmath::Vector3 { x, y: 0.0, z };
+                    let position = Vec3::new(x, 0.0, z);
 
-                    let rotation = if position.is_zero() {
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
+                    let rotation = if position.length() == 0.0 {
+                        Quat::from_axis_angle(Vec3::Z, 0.0)
                     } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                        Quat::from_axis_angle(position.normalize(), 0.785398)
                     };
 
                     Instance { position, rotation }
@@ -340,11 +309,11 @@ impl State {
                 .await
                 .unwrap();
 
-        let light_uniform = LightUniform {
-            position: [2.0, 2.0, 2.0],
-            _padding: 0,
-            color: [1.0, 1.0, 1.0],
-            _padding2: 0,
+        let light_uniform = Light {
+            position: Vec3::new(2.0, 2.0, 2.0).into(),
+            _pad0: 0,
+            color: Vec3::new(1.0, 1.0, 1.0).into(),
+            _pad1: 0
         };
         let light_buffer = MutableBuffer
             ::new(&vgpu, light_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
@@ -526,20 +495,19 @@ impl State {
     }
 
     fn update(&mut self, dt: std::time::Duration) {
-        
         self.camera_controller.update_camera(&mut self.camera, dt);
-        self.camera_uniform
-            .update_view_proj(&self.camera, &self.projection);
+        self.camera_uniform = build_camera_from_projection(&self.camera, &self.projection);
         self.camera_buffer.write(&self.vgpu, self.camera_uniform)
             .expect("Failed to update camera buffer");
 
         // Update the light
-        let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
-        self.light_uniform.position = (cgmath::Quaternion::from_axis_angle(
-            (0.0, 1.0, 0.0).into(),
-            cgmath::Deg(PI * dt.as_secs_f32()),
-        ) * old_position)
-            .into();
+        let old_position: Vec3 = self.light_uniform.position.into();
+        self.light_uniform.position = (
+            Quat::from_axis_angle(
+                Vec3::new(0.0, 1.0, 0.0), 
+                dt.as_secs_f32()
+            ) * old_position
+        ).into();
         self.light_buffer.write(&self.vgpu, self.light_uniform)
             .expect("Failed to write light buffer");
     }

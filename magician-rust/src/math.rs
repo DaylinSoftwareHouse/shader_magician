@@ -33,6 +33,7 @@
 
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
+use bytemuck::{Pod, Zeroable};
 // ─────────────────────────────────────────────────────────────────────────────
 // Re-export glam for users who need lower-level access.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,40 +43,52 @@ pub use glam;
 // Vector types
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct Vec2(pub glam::Vec2);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct Vec3(pub glam::Vec3);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct Vec4(pub glam::Vec4);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct DVec2(pub glam::DVec2);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct DVec3(pub glam::DVec3);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct DVec4(pub glam::DVec4);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable, Eq, Hash)]
 pub struct IVec2(pub glam::IVec2);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable, Eq, Hash)]
 pub struct IVec3(pub glam::IVec3);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable, Eq, Hash)]
 pub struct IVec4(pub glam::IVec4);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable, Eq, Hash)]
 pub struct UVec2(pub glam::UVec2);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable, Eq, Hash)]
 pub struct UVec3(pub glam::UVec3);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable, Eq, Hash)]
 pub struct UVec4(pub glam::UVec4);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -91,22 +104,28 @@ pub struct BVec4(pub glam::BVec4);
 // Matrix types
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct Mat2(pub glam::Mat2);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct Mat3(pub glam::Mat3);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct Mat4(pub glam::Mat4);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct DMat2(pub glam::DMat2);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct DMat3(pub glam::DMat3);
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Pod, Zeroable)]
 pub struct DMat4(pub glam::DMat4);
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,12 +1,15 @@
+use bytemuck::{Pod, Zeroable};
 use magician_macros::*;
 use magician_rust::*;
 
 
 #[derive(ShaderGroup)]
 pub struct CameraInput {
-    #[uniform] camera: Camera
+    #[uniform] pub camera: Camera
 }
 
+#[repr(C)]
+#[derive(Pod, Zeroable, Clone, Copy)]
 pub struct Camera {
     pub view_pos: Vec4,
     pub view_proj: Mat4
@@ -15,12 +18,16 @@ pub struct Camera {
 
 #[derive(ShaderGroup)]
 pub struct LightInput {
-    #[uniform] light: Light
+    #[uniform] pub light: Light
 }
 
+#[repr(C)]
+#[derive(Pod, Zeroable, Clone, Copy)]
 pub struct Light {
-    position: Vec3,
-    color: Vec3
+    pub position: Vec3,
+    pub _pad0: u32,
+    pub color: Vec3,
+    pub _pad1: u32
 }
 
 
