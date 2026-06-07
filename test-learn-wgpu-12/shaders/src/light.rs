@@ -1,27 +1,7 @@
 use magician_macros::*;
 use magician_rust::*;
 
-
-#[derive(ShaderGroup)]
-pub struct CameraInput {
-    #[uniform] camera: Camera
-}
-
-pub struct Camera {
-    pub view_pos: Vec4,
-    pub view_proj: Mat4
-}
-
-
-#[derive(ShaderGroup)]
-pub struct LightInput {
-    #[uniform] light: Light
-}
-
-pub struct Light {
-    position: Vec3,
-    color: Vec3
-}
+use crate::common::{CameraInput, LightInput};
 
 
 #[derive(ShaderLayout)]

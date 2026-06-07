@@ -3,7 +3,7 @@ use std::{convert::TryInto, sync::Arc};
 use magician_vgpu::glam::{Mat3A, Mat4, Quat, Vec3, Vec4};
 use magician_vgpu::{Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, RenderFrame, StoreOp, VirtualGpu, WritableBuffer};
 use model::{DrawLight, DrawModel, Vertex};
-use shaders::primary::{Camera, Light};
+use shaders::common::{Camera, Light};
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
