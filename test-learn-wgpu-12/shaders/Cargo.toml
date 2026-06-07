@@ -9,7 +9,10 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 magician-rust = { path = "../../magician-rust" }
 magician-macros = { path = "../../magician-macros" }
+magician-vgpu = { path = "../../magician-vgpu" }
+
 bytemuck = "1.25.0"
+wgpu = { version = "29.0" }
 
 [build-dependencies]
 magician-rust = { path = "../../magician-rust" }

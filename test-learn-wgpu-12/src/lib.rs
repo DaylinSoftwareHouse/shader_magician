@@ -1,9 +1,9 @@
 use std::{convert::TryInto, sync::Arc};
 
 use magician_vgpu::glam::{Mat3A, Mat4, Quat, Vec3, Vec4};
-use magician_vgpu::{Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, RenderFrame, StoreOp, VirtualGpu, WritableBuffer};
+use magician_vgpu::{BindableObject, BindableObjectCreator, Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, RenderFrame, StoreOp, VirtualGpu, WritableBuffer};
 use model::{DrawLight, DrawModel, Vertex};
-use shaders::common::{Camera, Light};
+use shaders::common::{Camera, CameraInput, Light};
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
@@ -117,7 +117,7 @@ pub struct State {
     camera_controller: camera::CameraController, 
     camera_uniform: Camera,
     camera_buffer: MutableBuffer<Camera>,
-    camera_bind_group: wgpu::BindGroup,
+    camera_object: BindableObject<CameraInput>,
     instances: Vec<Instance>,
     #[allow(dead_code)]
     instance_buffer: ImmutableBuffer<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>,
@@ -280,29 +280,7 @@ impl State {
                 wgpu::BufferUsages::VERTEX
             );
 
-        let camera_bind_group_layout =
-            vgpu.device().create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            });
-
-        let camera_bind_group = vgpu.device().create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.buffer().as_entire_binding(),
-            }],
-            label: Some("camera_bind_group"),
-        });
+        let camera_object = CameraInput::create_object(&vgpu, &camera_buffer);
 
         let obj_model =
             resources::load_model("cube.obj", vgpu.device(), vgpu.queue(), &texture_bind_group_layout)
@@ -354,7 +332,7 @@ impl State {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     Some(&texture_bind_group_layout),
-                    Some(&camera_bind_group_layout),
+                    Some(camera_object.layout()),
                     Some(&light_bind_group_layout),
                 ],
                 immediate_size: 0,
@@ -379,7 +357,7 @@ impl State {
             let layout = vgpu.device().create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Light Pipeline Layout"),
                 bind_group_layouts: &[
-                    Some(&camera_bind_group_layout),
+                    Some(camera_object.layout()),
                     Some(&light_bind_group_layout),
                 ],
                 immediate_size: 0,
@@ -436,7 +414,7 @@ impl State {
             projection,
             camera_controller,
             camera_buffer,
-            camera_bind_group,
+            camera_object,
             camera_uniform,
             instances,
             instance_buffer,
@@ -536,7 +514,7 @@ impl State {
             pass.pass_mut().set_pipeline(&self.light_render_pipeline);
             pass.pass_mut().draw_light_model(
                 &self.obj_model,
-                &self.camera_bind_group,
+                self.camera_object.bind_group(),
                 &self.light_bind_group,
             );
 
@@ -544,7 +522,7 @@ impl State {
             pass.pass_mut().draw_model_instanced(
                 &self.obj_model,
                 0..self.instances.len() as u32,
-                &self.camera_bind_group,
+                self.camera_object.bind_group(),
                 &self.light_bind_group,
             );
         }

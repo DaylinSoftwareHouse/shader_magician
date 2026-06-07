@@ -3,12 +3,14 @@ use std::sync::Arc;
 use getset::{Getters, MutGetters};
 
 pub mod attachments;
+pub mod bindable;
 pub mod buffers;
 pub mod frame;
 pub mod pass;
 pub mod textures;
 
 pub use attachments::*;
+pub use bindable::*;
 pub use buffers::*;
 pub use frame::*;
 pub use pass::*;
