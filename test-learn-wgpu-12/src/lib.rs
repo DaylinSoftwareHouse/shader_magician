@@ -1,11 +1,11 @@
+use std::convert::TryInto;
 use std::sync::Arc;
 use std::f32::consts::PI;
 
 use cgmath::prelude::*;
 use magician_vgpu::glam::Vec4;
-use magician_vgpu::{LoadOp, PassAttachment, PassTarget, RenderFrame, StoreOp, VirtualGpu};
+use magician_vgpu::{Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, RenderFrame, StoreOp, VirtualGpu, WritableBuffer};
 use model::{DrawLight, DrawModel, Vertex};
-use wgpu::util::DeviceExt;
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
@@ -23,7 +23,7 @@ mod resources;
 mod texture;
 
 
-const NUM_INSTANCES_PER_ROW: u32 = 10;
+const NUM_INSTANCES_PER_ROW: usize = 10;
 
 
 #[repr(C)]
@@ -145,15 +145,15 @@ pub struct State {
     projection: camera::Projection,              
     camera_controller: camera::CameraController, 
     camera_uniform: CameraUniform,
-    camera_buffer: wgpu::Buffer,
+    camera_buffer: MutableBuffer<CameraUniform>,
     camera_bind_group: wgpu::BindGroup,
     instances: Vec<Instance>,
     #[allow(dead_code)]
-    instance_buffer: wgpu::Buffer,
+    instance_buffer: ImmutableBuffer<[InstanceRaw; 100]>,
     depth_texture: magician_vgpu::StaticTexture,
     is_surface_configured: bool,
     light_uniform: LightUniform,
-    light_buffer: wgpu::Buffer,
+    light_buffer: MutableBuffer<LightUniform>,
     light_bind_group: wgpu::BindGroup,
     light_render_pipeline: wgpu::RenderPipeline,
     #[allow(dead_code)]
@@ -275,11 +275,9 @@ impl State {
         let camera_controller = camera::CameraController::new(4.0, 0.4);
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&camera, &projection);
-        let camera_buffer = vgpu.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let camera_buffer = MutableBuffer
+            ::<CameraUniform>
+            ::new(&vgpu, camera_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
 
         const SPACE_BETWEEN: f32 = 3.0;
         let instances = (0..NUM_INSTANCES_PER_ROW)
@@ -305,11 +303,13 @@ impl State {
             .collect::<Vec<_>>();
 
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = vgpu.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let instance_buffer = ImmutableBuffer
+            ::<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>
+            ::new(
+                &vgpu, 
+                instance_data.try_into().unwrap(), 
+                wgpu::BufferUsages::VERTEX
+            );
 
         let camera_bind_group_layout =
             vgpu.device().create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -330,7 +330,7 @@ impl State {
             layout: &camera_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: camera_buffer.as_entire_binding(),
+                resource: camera_buffer.buffer().as_entire_binding(),
             }],
             label: Some("camera_bind_group"),
         });
@@ -346,12 +346,8 @@ impl State {
             color: [1.0, 1.0, 1.0],
             _padding2: 0,
         };
-
-        let light_buffer = vgpu.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Light VB"),
-            contents: bytemuck::cast_slice(&[light_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let light_buffer = MutableBuffer
+            ::new(&vgpu, light_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
 
         let light_bind_group_layout =
             vgpu.device().create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -372,7 +368,7 @@ impl State {
             layout: &light_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: light_buffer.as_entire_binding(),
+                resource: light_buffer.buffer().as_entire_binding(),
             }],
             label: None,
         });
@@ -534,11 +530,8 @@ impl State {
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.camera_uniform
             .update_view_proj(&self.camera, &self.projection);
-        self.vgpu.queue().write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_uniform]),
-        );
+        self.camera_buffer.write(&self.vgpu, self.camera_uniform)
+            .expect("Failed to update camera buffer");
 
         // Update the light
         let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
@@ -547,11 +540,8 @@ impl State {
             cgmath::Deg(PI * dt.as_secs_f32()),
         ) * old_position)
             .into();
-        self.vgpu.queue().write_buffer(
-            &self.light_buffer,
-            0,
-            bytemuck::cast_slice(&[self.light_uniform]),
-        );
+        self.light_buffer.write(&self.vgpu, self.light_uniform)
+            .expect("Failed to write light buffer");
     }
 
     fn render(&mut self) -> anyhow::Result<()> {
@@ -574,7 +564,7 @@ impl State {
                 })
             );
 
-            pass.pass_mut().set_vertex_buffer(1, self.instance_buffer.slice(..));
+            pass.pass_mut().set_vertex_buffer(1, self.instance_buffer.buffer().slice(..));
             pass.pass_mut().set_pipeline(&self.light_render_pipeline);
             pass.pass_mut().draw_light_model(
                 &self.obj_model,

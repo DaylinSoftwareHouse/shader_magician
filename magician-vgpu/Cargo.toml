@@ -10,3 +10,4 @@ getset = "0.1.6"
 wgpu = { version = "29.0"}
 winit = { version = "0.30", features = ["android-native-activity"] }
 anyhow = "1.0.102"
+bytemuck = "1.25.0"
