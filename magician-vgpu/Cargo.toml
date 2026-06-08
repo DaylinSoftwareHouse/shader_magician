@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 magician-rust = { path = "../magician-rust" }
+magician-vgpu-macros = { path = "./macros" }
 
 getset = "0.1.6"
 wgpu = { version = "29.0"}

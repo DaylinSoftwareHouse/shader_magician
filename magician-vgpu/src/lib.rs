@@ -16,8 +16,9 @@ pub use frame::*;
 pub use pass::*;
 pub use textures::*;
 
-pub use magician_rust as magician_rust;
+pub use magician_rust as rust;
 pub use magician_rust::glam as glam;
+pub use magician_vgpu_macros as macros;
 
 #[derive(Getters, MutGetters)]
 pub struct VirtualGpu {

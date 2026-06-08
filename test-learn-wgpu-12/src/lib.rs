@@ -2,8 +2,8 @@ use std::{convert::TryInto, sync::Arc};
 
 use magician_vgpu::glam::{Mat3A, Mat4, Quat, Vec3, Vec4};
 use magician_vgpu::{BindableObject, BindableObjectCreator, Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, RenderFrame, StoreOp, VirtualGpu, WritableBuffer};
-use model::{DrawLight, DrawModel, Vertex};
-use shaders::common::{Camera, CameraInput, Light};
+use model::Vertex;
+use shaders::common::{Camera, CameraInput, Light, LightInput};
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
@@ -125,7 +125,7 @@ pub struct State {
     is_surface_configured: bool,
     light_uniform: Light,
     light_buffer: MutableBuffer<Light>,
-    light_bind_group: wgpu::BindGroup,
+    light_object: BindableObject<LightInput>,
     light_render_pipeline: wgpu::RenderPipeline,
     #[allow(dead_code)]
     debug_material: model::Material,
@@ -295,30 +295,8 @@ impl State {
         };
         let light_buffer = MutableBuffer
             ::new(&vgpu, light_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+        let light_object = LightInput::create_object(&vgpu, &light_buffer);
 
-        let light_bind_group_layout =
-            vgpu.device().create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: None,
-            });
-
-        let light_bind_group = vgpu.device().create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &light_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: light_buffer.buffer().as_entire_binding(),
-            }],
-            label: None,
-        });
 
         let depth_texture = texture::Texture::create_depth_texture(
             vgpu.device(), 
@@ -333,7 +311,7 @@ impl State {
                 bind_group_layouts: &[
                     Some(&texture_bind_group_layout),
                     Some(camera_object.layout()),
-                    Some(&light_bind_group_layout),
+                    Some(light_object.layout()),
                 ],
                 immediate_size: 0,
             });
@@ -358,7 +336,7 @@ impl State {
                 label: Some("Light Pipeline Layout"),
                 bind_group_layouts: &[
                     Some(camera_object.layout()),
-                    Some(&light_bind_group_layout),
+                    Some(light_object.layout()),
                 ],
                 immediate_size: 0,
             });
@@ -422,7 +400,7 @@ impl State {
             is_surface_configured: false,
             light_uniform,
             light_buffer,
-            light_bind_group,
+            light_object,
             light_render_pipeline,
             #[allow(dead_code)]
             debug_material,
@@ -515,7 +493,7 @@ impl State {
             pass.pass_mut().draw_light_model(
                 &self.obj_model,
                 self.camera_object.bind_group(),
-                &self.light_bind_group,
+                self.light_object.bind_group(),
             );
 
             pass.pass_mut().set_pipeline(&self.render_pipeline);
@@ -523,7 +501,7 @@ impl State {
                 &self.obj_model,
                 0..self.instances.len() as u32,
                 self.camera_object.bind_group(),
-                &self.light_bind_group,
+                &self.light_object.bind_group(),
             );
         }
 
