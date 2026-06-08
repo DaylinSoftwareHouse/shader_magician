@@ -7,6 +7,7 @@ pub mod bindable;
 pub mod buffers;
 pub mod frame;
 pub mod pass;
+pub mod pipeline;
 pub mod textures;
 
 pub use attachments::*;
@@ -14,6 +15,7 @@ pub use bindable::*;
 pub use buffers::*;
 pub use frame::*;
 pub use pass::*;
+pub use pipeline::*;
 pub use textures::*;
 
 pub use magician_rust as rust;
