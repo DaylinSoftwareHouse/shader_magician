@@ -1,2 +1,2 @@
 [env]
-OUT_DIR = "./out-dir"
+OUT_DIR = "."

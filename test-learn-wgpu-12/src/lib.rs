@@ -442,10 +442,7 @@ impl ApplicationHandler<State> for App {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        let state = match &mut self.state {
-            Some(canvas) => canvas,
-            None => return,
-        };
+        let Some(state) = self.state.as_mut() else { return };
 
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
