@@ -3,13 +3,29 @@ use std::path::PathBuf;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::quote;
-use syn::{Data, DeriveInput, Fields, Ident, ItemFn, LitStr, parse_macro_input};
+use syn::{Data, DeriveInput, Fields, Ident, ItemFn, LitStr, Token, parse::{Parse, ParseStream}, parse_macro_input};
+
+#[allow(dead_code)]
+struct ShaderArgs {
+    path: LitStr,
+    stage: Ident,
+}
+
+impl Parse for ShaderArgs {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let path: LitStr = input.parse()?;
+        input.parse::<Token![,]>()?;
+        let stage: Ident = input.parse()?;
+        Ok(ShaderArgs { path, stage })
+    }
+}
 
 #[proc_macro_attribute]
 pub fn shader(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item_fn = item.clone();
     let item_fn = parse_macro_input!(item_fn as ItemFn);
-    let shader_out_path = parse_macro_input!(attr as LitStr).value();
+    let shader_args = parse_macro_input!(attr as ShaderArgs);
+    let shader_out_path = shader_args.path.value();
 
     // grab shader folder and make sure it exists
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")

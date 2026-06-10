@@ -179,17 +179,17 @@ impl State {
             .build(&vgpu);
 
         let light_render_pipeline = Pipeline::builder("Light Shader")
-            .shader(ShaderSource::Combined { 
-                source: include_str!("../shaders/src/light.wgsl").into(), 
-                vertex_main_function: "vs_main".into(), 
-                fragment_main_function: "fs_main".into() 
-            })
-            // .shader(ShaderSource::Independent { 
-            //     vertex: include_str!("../shaders/shader_out/light_vs_main.wgsl").into(), 
-            //     vertex_main_function: "light_vs_main".into(), 
-            //     fragment: include_str!("../shaders/shader_out/light_fs_main.wgsl").into(), 
-            //     fragment_main_function: "light_fs_main".into()
+            // .shader(ShaderSource::Combined { 
+            //     source: include_str!("../shaders/src/light.wgsl").into(), 
+            //     vertex_main_function: "vs_main".into(), 
+            //     fragment_main_function: "fs_main".into() 
             // })
+            .shader(ShaderSource::Independent { 
+                vertex: include_str!("../shaders/shader_out/light_vs_main.wgsl").into(), 
+                vertex_main_function: "light_vs_main".into(), 
+                fragment: include_str!("../shaders/shader_out/light_fs_main.wgsl").into(), 
+                fragment_main_function: "light_fs_main".into()
+            })
             .depth_format(texture::Texture::DEPTH_FORMAT)
             .vertex(model::ModelVertex::desc())
             .layout(&camera_object)

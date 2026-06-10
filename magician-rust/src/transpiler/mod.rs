@@ -14,7 +14,9 @@ pub struct Transpiler {
     globals: AHashMap<String, ShaderElement>,
     structs: AHashMap<String, TranspiledStruct>,
     functions: AHashMap<String, ShaderElement>,
-    global_struct_names: Vec<String>
+    global_struct_names: Vec<String>,
+    entry_point: String,
+    shader_ty: String
 }
 
 pub struct TranspiledStruct {
@@ -28,13 +30,14 @@ pub struct TranspiledStructField {
 }
 
 impl Transpiler {
-    pub fn new(file: syn::File) -> Self {
+    pub fn new(file: syn::File, entry_point: String, shader_ty: String) -> Self {
         Self {
             file,
             globals: AHashMap::new(),
             structs: AHashMap::new(),
             functions: AHashMap::new(),
-            global_struct_names: Vec::new()
+            global_struct_names: Vec::new(),
+            entry_point, shader_ty
         }
     }
 
@@ -80,7 +83,7 @@ impl Transpiler {
                 syn::Item::Enum(_item_enum) => todo!(),
                 syn::Item::ExternCrate(_item_extern_crate) => todo!(),
                 syn::Item::Fn(item_fn) => { 
-                    let function = convert_function(&self, item_fn, &self.global_struct_names);
+                    let function = convert_function(&self, item_fn, &self.global_struct_names, &self.entry_point, &self.shader_ty);
                     self.functions.insert(function.0, function.1);
                 },
                 syn::Item::ForeignMod(_item_foreign_mod) => todo!("ForeignMod"),

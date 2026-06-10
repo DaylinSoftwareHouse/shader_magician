@@ -10,8 +10,14 @@ pub struct FunctionContext {
     pub global_params: AHashMap<String, String> // param name -> param type
 }
 
-pub(crate) fn convert_function(transpiler: &Transpiler, item: &syn::ItemFn, struct_global_names: &[String]) -> (String, ShaderElement) {
-    let attrs = Vec::new();
+pub(crate) fn convert_function(
+    transpiler: &Transpiler, 
+    item: &syn::ItemFn, 
+    struct_global_names: &[String],
+    entry_point: &String,
+    shader_ty: &String
+) -> (String, ShaderElement) {
+    let mut attrs = Vec::new();
     let mut func = FunctionContext::default();
 
     let name = item.sig.ident.to_string();
@@ -39,6 +45,8 @@ pub(crate) fn convert_function(transpiler: &Transpiler, item: &syn::ItemFn, stru
         syn::ReturnType::Default => None,
         syn::ReturnType::Type(_, ty) => Some(convert_ty(&*ty))
     };
+
+    if name == *entry_point { attrs.push(Attr { name: shader_ty.clone(), content: "".into() }); }
 
     (
         name.clone(),

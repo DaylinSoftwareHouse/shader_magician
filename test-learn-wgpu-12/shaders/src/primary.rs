@@ -37,7 +37,7 @@ pub struct VertexOutput {
 }
 
 
-#[shader("./shader_out")]
+#[shader("./shader_out", vertex)]
 pub fn primary_vs_main(
     cam_in: CameraInput,
     light_in: LightInput,
@@ -78,7 +78,7 @@ pub struct FragmentOutput {
     #[location = 0] color: Vec4
 }
 
-#[shader("./shader_out")]
+#[shader("./shader_out", fragment)]
 pub fn primary_fs_main(
     material: Material,
     light_in: LightInput,

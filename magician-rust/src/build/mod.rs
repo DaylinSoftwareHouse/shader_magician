@@ -10,6 +10,7 @@ pub mod visit;
 pub use index::*;
 pub use resolver::*;
 pub use stitch::*;
+use syn::{Ident, LitStr, Token, parse::ParseStream};
 pub use visit::*;
 
 pub fn build(
@@ -31,10 +32,10 @@ pub fn build(
     }
 
     // for each target function, build shader
-    for fn_name in &targets {
+    for (fn_name, shader_ty) in &targets {
         // ensure only operating on functions
         let Some(syn::Item::Fn(entry_fn)) = index.items.get(fn_name) 
-            else { continue };
+            else { panic!("Failed to find function: {fn_name:?}") };
 
         let save_name = &fn_name.split("::").last().unwrap().to_string();
 
@@ -53,7 +54,7 @@ pub fn build(
                 b.push(format!("extracted_{}.syntree", save_name));
                 std::fs::write(&b, format!("{:#?}", tree.file)).unwrap();
             
-                let raw_translation = Transpiler::new(tree.file.clone());
+                let raw_translation = Transpiler::new(tree.file.clone(), save_name.clone(), shader_ty.clone());
                 let raw_wgsl = raw_translation.transpile_raw();
                 let mut c = dbg_path.clone();
                 c.push(format!("raw_wgsl_{}.wgsl", save_name));
@@ -61,7 +62,7 @@ pub fn build(
             }
 
             // execute transcompilation
-            let transpiler = Transpiler::new(tree.file);
+            let transpiler = Transpiler::new(tree.file, save_name.clone(), shader_ty.clone());
             let wgsl = transpiler.transpile_wgsl()
                 .expect("Failed to transpile wgsl");
 
@@ -88,13 +89,13 @@ pub fn build(
     }
 }
 
-fn read_targets(src_root: &std::path::Path) -> Vec<String> {
+fn read_targets(src_root: &std::path::Path) -> Vec<(String, String)> {
     let mut targets = Vec::new();
     collect_shader_fns(src_root, src_root, &mut targets);
     targets
 }
 
-fn collect_shader_fns(dir: &std::path::Path, root_dir: &std::path::Path, targets: &mut Vec<String>) {
+fn collect_shader_fns(dir: &std::path::Path, root_dir: &std::path::Path, targets: &mut Vec<(String, String)>) {
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(err) => {
@@ -113,7 +114,7 @@ fn collect_shader_fns(dir: &std::path::Path, root_dir: &std::path::Path, targets
     }
 }
 
-fn collect_shader_fns_in_file(path: &std::path::Path, root_dir: &std::path::Path, targets: &mut Vec<String>) {
+fn collect_shader_fns_in_file(path: &std::path::Path, root_dir: &std::path::Path, targets: &mut Vec<(String, String)>) {
     let src = match std::fs::read_to_string(path) {
         Ok(s) => s,
         Err(err) => {
@@ -132,16 +133,26 @@ fn collect_shader_fns_in_file(path: &std::path::Path, root_dir: &std::path::Path
 
     for item in &file.items {
         if let syn::Item::Fn(f) = item {
-            if has_shader_attr(f) {
-                targets.push(f.sig.ident.to_string());
-                targets.push(index::extract_path(&path.into(), root_dir, &f.sig.ident))
+            if let Some(shader_ty) = get_shader_attr(f) {
+                let fn_name = index::extract_path(&path.into(), root_dir, &f.sig.ident);
+                targets.push((fn_name, shader_ty));
+                println!("Targets {targets:?}")
             }
         }
     }
 }
 
-fn has_shader_attr(f: &syn::ItemFn) -> bool {
-    f.attrs.iter().any(|attr| {
-        attr.path().segments.last().map_or(false, |seg| seg.ident == "shader")
+fn get_shader_attr(f: &syn::ItemFn) -> Option<String> {
+    f.attrs.iter().find_map(|attr| {
+        if !attr.path().segments.last().map_or(false, |seg| seg.ident == "shader") { return None }
+
+        let ty = attr.parse_args_with(|input: ParseStream| {
+            let _path: LitStr = input.parse()?;
+            input.parse::<Token![,]>()?;
+            let stage: Ident = input.parse()?;
+            Ok(stage)
+        });
+
+        ty.ok().map(|a| a.to_string())
     })
 }
