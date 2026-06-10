@@ -84,8 +84,8 @@ pub(crate) fn convert_global_struct(item: &syn::ItemStruct, counter: &AtomicU32)
 pub(crate) fn convert_global(item: &syn::Field, counter: &AtomicU32) -> (String, ShaderElement) {
     let binding = counter.fetch_add(1, Ordering::AcqRel);
     let attrs = vec![
-        Attr { name: "group".to_string(), content: "0".to_string() },
-        Attr { name: "binding".to_string(), content: binding.to_string() }
+        Attr { name: "group".to_string(), content: binding.to_string() },
+        Attr { name: "binding".to_string(), content: "0".to_string() }
     ];
 
     let name = item.ident
