@@ -4,10 +4,10 @@
 
 # Shaders
 [ ] Texture processing
-[ ] Handle @vertex and @fragment with standardized names
-[ ] May need better binding and group assignment algo
+[x] Handle @vertex and @fragment with standardized names
+[?] May need better binding and group assignment algo
 
 # Pipelines
-[ ] Allow for seperate vertex and fragment shaders with custom main functions
+[x] Allow for seperate vertex and fragment shaders with custom main functions
 [ ] Create solution for texture_bind_group_layout
 [ ] Load pipeline parameters from shader macros
