@@ -2,7 +2,7 @@ use std::any::Any;
 use std::{convert::TryInto, sync::Arc};
 
 use magician_vgpu::glam::{Quat, Vec3, Vec4};
-use magician_vgpu::{BindableObject, BindableObjectCreator, Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, Pipeline, RenderFrame, StoreOp, VirtualGpu, WritableBuffer};
+use magician_vgpu::{BindableObject, BindableObjectCreator, Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, Pipeline, RenderFrame, ShaderSource, StoreOp, VirtualGpu, WritableBuffer};
 use model::Vertex;
 use shaders::common::{Camera, CameraInput, Light, LightInput};
 use winit::application::ApplicationHandler;
@@ -159,7 +159,17 @@ impl State {
         let depth_texture = magician_vgpu::StaticTexture::new(depth_texture.texture, depth_texture.view, depth_texture.sampler);
 
         let render_pipeline = Pipeline::builder("Normal Shader")
-            .shader(include_str!("../shaders/src/shader.wgsl"))
+            .shader(ShaderSource::Combined { 
+                source: include_str!("../shaders/src/shader.wgsl").into(), 
+                vertex_main_function: "vs_main".into(), 
+                fragment_main_function: "fs_main".into() 
+            })
+            // .shader(ShaderSource::Independent { 
+            //     vertex: include_str!("../shaders/shader_out/primary_vs_main.wgsl").into(), 
+            //     vertex_main_function: "primary_vs_main".into(), 
+            //     fragment: include_str!("../shaders/shader_out/primary_fs_main.wgsl").into(), 
+            //     fragment_main_function: "primary_fs_main".into()
+            // })
             .depth_format(texture::Texture::DEPTH_FORMAT)
             .vertex(model::ModelVertex::desc())
             .vertex(InstanceRaw::desc())
@@ -169,7 +179,17 @@ impl State {
             .build(&vgpu);
 
         let light_render_pipeline = Pipeline::builder("Light Shader")
-            .shader(include_str!("../shaders/src/light.wgsl"))
+            .shader(ShaderSource::Combined { 
+                source: include_str!("../shaders/src/light.wgsl").into(), 
+                vertex_main_function: "vs_main".into(), 
+                fragment_main_function: "fs_main".into() 
+            })
+            // .shader(ShaderSource::Independent { 
+            //     vertex: include_str!("../shaders/shader_out/light_vs_main.wgsl").into(), 
+            //     vertex_main_function: "light_vs_main".into(), 
+            //     fragment: include_str!("../shaders/shader_out/light_fs_main.wgsl").into(), 
+            //     fragment_main_function: "light_fs_main".into()
+            // })
             .depth_format(texture::Texture::DEPTH_FORMAT)
             .vertex(model::ModelVertex::desc())
             .layout(&camera_object)

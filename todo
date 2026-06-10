@@ -1,7 +1,11 @@
 [x] Fix false shared struct deps when common names involved (VertexInput, VertexOutput, etc)
 [ ] Fix or add error for groups with items the same name as the function param
 [x] Can we fix build failing cause rust-analyzer to fail?
+
+# Shaders
 [ ] Texture processing
+[ ] Handle @vertex and @fragment with standardized names
+[ ] May need better binding and group assignment algo
 
 # Pipelines
 [ ] Allow for seperate vertex and fragment shaders with custom main functions

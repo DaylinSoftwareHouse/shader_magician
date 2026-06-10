@@ -29,13 +29,30 @@ impl Pipeline {
     }
 }
 
+#[derive(Default, Debug, Clone)]
+pub enum ShaderSource {
+    #[default]
+    Empty,
+    Combined {
+        source: String,
+        vertex_main_function: String,
+        fragment_main_function: String
+    },
+    Independent {
+        vertex: String,
+        vertex_main_function: String,
+        fragment: String,
+        fragment_main_function: String
+    }
+}
+
 /// A simple builder for creating `Pipeline`s in a simple and easy
 /// to use way without the bulky boiler plate of normal WGPU
 /// pipeline creation.
 #[derive(Default)]
 pub struct PipelineBuilder<'a> {
     label: String,
-    shader_src: String,
+    shader_src: ShaderSource,
     vertex_layouts: Vec<wgpu::VertexBufferLayout<'a>>,
     depth_format: Option<wgpu::TextureFormat>,
     slot_map: AHashMap<TypeId, (u32, &'a wgpu::BindGroupLayout)>
@@ -43,8 +60,8 @@ pub struct PipelineBuilder<'a> {
 
 impl <'a> PipelineBuilder<'a> {
     /// Sets the shader source WGSL text in the builder.
-    pub fn shader(mut self, shader_src: impl Into<String>) -> Self {
-        self.shader_src = shader_src.into();
+    pub fn shader(mut self, shader_src: ShaderSource) -> Self {
+        self.shader_src = shader_src;
         return self;
     }
 
@@ -101,10 +118,30 @@ impl <'a> PipelineBuilder<'a> {
         );
 
         // create shader module
-        let shader = vgpu.device().create_shader_module(
+        let (vs_main, vs_shader) = match &self.shader_src {
+            ShaderSource::Empty => panic!("No shader source given"),
+            ShaderSource::Combined { source, vertex_main_function, fragment_main_function: _ } =>
+                (vertex_main_function, source),
+            ShaderSource::Independent { vertex, vertex_main_function, fragment: _, fragment_main_function: _ } =>
+                (vertex_main_function, vertex)
+        };
+        let vertex_shader = vgpu.device().create_shader_module(
             wgpu::ShaderModuleDescriptor {
                 label: Some(&self.label),
-                source: wgpu::ShaderSource::Wgsl(self.shader_src.into())
+                source: wgpu::ShaderSource::Wgsl(vs_shader.into())
+            }
+        );
+        let (fs_main, fs_shader) = match &self.shader_src {
+            ShaderSource::Empty => panic!("No shader source given"),
+            ShaderSource::Combined { source, vertex_main_function: _, fragment_main_function } =>
+                (fragment_main_function, source),
+            ShaderSource::Independent { vertex: _, vertex_main_function: _, fragment, fragment_main_function } =>
+                (fragment_main_function, fragment)
+        };
+        let fragment_shader = vgpu.device().create_shader_module(
+            wgpu::ShaderModuleDescriptor {
+                label: Some(&self.label),
+                source: wgpu::ShaderSource::Wgsl(fs_shader.into())
             }
         );
 
@@ -112,14 +149,14 @@ impl <'a> PipelineBuilder<'a> {
             label: Some(&self.label),
             layout: Some(&layout),
             vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
+                module: &vertex_shader,
+                entry_point: Some(vs_main.as_str()),
                 buffers: &self.vertex_layouts,
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
+                module: &fragment_shader,
+                entry_point: Some(fs_main.as_str()),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: vgpu.config().format,
                     blend: Some(wgpu::BlendState {
@@ -135,11 +172,8 @@ impl <'a> PipelineBuilder<'a> {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
-                // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
                 polygon_mode: wgpu::PolygonMode::Fill,
-                // Requires Features::DEPTH_CLIP_CONTROL
                 unclipped_depth: false,
-                // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
             depth_stencil: self.depth_format
@@ -155,8 +189,6 @@ impl <'a> PipelineBuilder<'a> {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            // If the pipeline will be used with a multiview render pass, this
-            // tells wgpu to render to just specific texture layers.
             multiview_mask: None,
             cache: None,
         });
