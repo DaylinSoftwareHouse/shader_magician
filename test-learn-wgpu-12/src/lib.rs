@@ -57,7 +57,7 @@ impl State {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -67,14 +67,14 @@ impl State {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
                     // normal map
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             sample_type: wgpu::TextureSampleType::Float { filterable: true },
@@ -84,7 +84,7 @@ impl State {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
@@ -159,17 +159,12 @@ impl State {
         let depth_texture = magician_vgpu::StaticTexture::new(depth_texture.texture, depth_texture.view, depth_texture.sampler);
 
         let render_pipeline = Pipeline::builder("Normal Shader")
-            .shader(ShaderSource::Combined { 
-                source: include_str!("../shaders/src/shader.wgsl").into(), 
-                vertex_main_function: "vs_main".into(), 
-                fragment_main_function: "fs_main".into() 
+            .shader(ShaderSource::Independent { 
+                vertex: include_str!("../shaders/shader_out/primary_vs_main.wgsl").into(), 
+                vertex_main_function: "primary_vs_main".into(), 
+                fragment: include_str!("../shaders/shader_out/primary_fs_main.wgsl").into(), 
+                fragment_main_function: "primary_fs_main".into()
             })
-            // .shader(ShaderSource::Independent { 
-            //     vertex: include_str!("../shaders/shader_out/primary_vs_main.wgsl").into(), 
-            //     vertex_main_function: "primary_vs_main".into(), 
-            //     fragment: include_str!("../shaders/shader_out/primary_fs_main.wgsl").into(), 
-            //     fragment_main_function: "primary_fs_main".into()
-            // })
             .depth_format(texture::Texture::DEPTH_FORMAT)
             .vertex(model::ModelVertex::desc())
             .vertex(InstanceRaw::desc())
@@ -179,11 +174,6 @@ impl State {
             .build(&vgpu);
 
         let light_render_pipeline = Pipeline::builder("Light Shader")
-            // .shader(ShaderSource::Combined { 
-            //     source: include_str!("../shaders/src/light.wgsl").into(), 
-            //     vertex_main_function: "vs_main".into(), 
-            //     fragment_main_function: "fs_main".into() 
-            // })
             .shader(ShaderSource::Independent { 
                 vertex: include_str!("../shaders/shader_out/light_vs_main.wgsl").into(), 
                 vertex_main_function: "light_vs_main".into(), 

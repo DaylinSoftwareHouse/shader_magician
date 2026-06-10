@@ -75,17 +75,19 @@ pub(crate) fn convert_non_global_struct(item: &syn::ItemStruct) -> (String, Tran
     )
 }
 
-pub(crate) fn convert_global_struct(item: &syn::ItemStruct, counter: &AtomicU32) -> Vec<(String, ShaderElement)> {
+pub(crate) fn convert_global_struct(item: &syn::ItemStruct, group_counter: &AtomicU32) -> Vec<(String, ShaderElement)> {
+    let group = group_counter.fetch_add(1, Ordering::AcqRel);
+    let binding_counter = AtomicU32::new(0);
     item.fields.iter()
-        .map(|field| convert_global(field, counter))
+        .map(|field| convert_global(field, group, &binding_counter))
         .collect()
 }
 
-pub(crate) fn convert_global(item: &syn::Field, counter: &AtomicU32) -> (String, ShaderElement) {
-    let binding = counter.fetch_add(1, Ordering::AcqRel);
+pub(crate) fn convert_global(item: &syn::Field, group: u32, binding_counter: &AtomicU32) -> (String, ShaderElement) {
+    let binding = binding_counter.fetch_add(1, Ordering::AcqRel);
     let attrs = vec![
-        Attr { name: "group".to_string(), content: binding.to_string() },
-        Attr { name: "binding".to_string(), content: "0".to_string() }
+        Attr { name: "group".to_string(), content: group.to_string() },
+        Attr { name: "binding".to_string(), content: binding.to_string() }
     ];
 
     let name = item.ident

@@ -39,6 +39,7 @@ pub struct VertexOutput {
 
 #[shader("./shader_out", vertex)]
 pub fn primary_vs_main(
+    _material: Material,
     cam_in: CameraInput,
     light_in: LightInput,
     model: VertexInput,
@@ -81,6 +82,7 @@ pub struct FragmentOutput {
 #[shader("./shader_out", fragment)]
 pub fn primary_fs_main(
     material: Material,
+    _cam_in: CameraInput,
     light_in: LightInput,
     input: VertexOutput
 ) -> FragmentOutput {

@@ -3,11 +3,12 @@
 [x] Can we fix build failing cause rust-analyzer to fail?
 
 # Shaders
-[ ] Texture processing
+[x] Texture processing
 [x] Handle @vertex and @fragment with standardized names
 [?] May need better binding and group assignment algo
+[ ] Don't require shaders provide groups in the same order
 
 # Pipelines
 [x] Allow for seperate vertex and fragment shaders with custom main functions
-[ ] Create solution for texture_bind_group_layout
+[x] Create solution for texture_bind_group_layout
 [ ] Load pipeline parameters from shader macros
