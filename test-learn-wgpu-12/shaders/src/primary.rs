@@ -39,9 +39,9 @@ pub struct VertexOutput {
 
 #[shader("./shader_out", vertex)]
 pub fn primary_vs_main(
-    _material: Material,
-    cam_in: CameraInput,
-    light_in: LightInput,
+    #[group = 0] _material: Material,
+    #[group = 1] cam_in: CameraInput,
+    #[group = 2] light_in: LightInput,
     model: VertexInput,
     instance: InstanceInput
 ) -> VertexOutput {
@@ -81,9 +81,9 @@ pub struct FragmentOutput {
 
 #[shader("./shader_out", fragment)]
 pub fn primary_fs_main(
-    material: Material,
-    _cam_in: CameraInput,
-    light_in: LightInput,
+    #[group = 0] material: Material,
+    #[group = 2] light_in: LightInput,
+    #[group = 1] _cam_in: CameraInput,
     input: VertexOutput
 ) -> FragmentOutput {
     let object_color = textureSample(material.t_diffuse, material.s_diffuse, input.tex_coords);

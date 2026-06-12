@@ -21,9 +21,14 @@ impl Parse for ShaderArgs {
 }
 
 #[proc_macro_attribute]
+pub fn group(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    return item;
+}
+
+#[proc_macro_attribute]
 pub fn shader(attr: TokenStream, item: TokenStream) -> TokenStream {
     let item_fn = item.clone();
-    let item_fn = parse_macro_input!(item_fn as ItemFn);
+    let mut item_fn = parse_macro_input!(item_fn as ItemFn);
     let shader_args = parse_macro_input!(attr as ShaderArgs);
     let shader_out_path = shader_args.path.value();
 
@@ -51,8 +56,20 @@ pub fn shader(attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! { include_str!(#path) } 
         };
 
-    // convert item to proc macro 2
-    let item: proc_macro2::TokenStream = item.into();
+    // filter out attributes
+    item_fn.sig.inputs.iter_mut().for_each(|input| {
+        match input {
+            syn::FnArg::Receiver(_receiver) => {},
+            syn::FnArg::Typed(pat_type) => {
+                pat_type.attrs.retain(|a| match &a.meta {
+                    syn::Meta::Path(_path) => true,
+                    syn::Meta::List(_meta_list) => true,
+                    syn::Meta::NameValue(meta_name_value) => meta_name_value.path.segments
+                        .last().map(|a| a.ident != "group").unwrap_or(true),
+                });
+            }
+        }
+    });
 
     // build ident
     let ident = Ident::new(&format!("SHADER_{}", item_fn.sig.ident.to_string()), Span::call_site());
@@ -60,7 +77,7 @@ pub fn shader(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         pub const #ident: &str = #constant;
 
-        #item
+        #item_fn
     };
 
     expanded.into()

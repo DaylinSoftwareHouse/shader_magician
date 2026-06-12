@@ -1,9 +1,10 @@
-use std::{collections::HashMap, sync::atomic::AtomicU32};
+use std::collections::HashMap;
 
 use ahash::AHashMap;
 use global::*;
 use magician_ast::*;
 use naga::valid::{Capabilities, ValidationFlags, Validator};
+use syn::ItemStruct;
 
 pub(crate) mod expr;
 pub(crate) mod global;
@@ -14,7 +15,7 @@ pub struct Transpiler {
     globals: AHashMap<String, ShaderElement>,
     structs: AHashMap<String, TranspiledStruct>,
     functions: AHashMap<String, ShaderElement>,
-    global_struct_names: Vec<String>,
+    unfinished_globals: HashMap<String, ItemStruct>,
     entry_point: String,
     shader_ty: String
 }
@@ -36,15 +37,13 @@ impl Transpiler {
             globals: AHashMap::new(),
             structs: AHashMap::new(),
             functions: AHashMap::new(),
-            global_struct_names: Vec::new(),
+            unfinished_globals: HashMap::new(),
             entry_point, shader_ty
         }
     }
 
     pub fn transpile_raw(mut self) -> String {
-        let counter = AtomicU32::new(0);
-
-        for item in &self.file.items {
+        for item in self.file.items.clone() {
             match item {
                 syn::Item::Struct(item_struct) => {
                     let is_group = item_struct.attrs.iter().any(|attr| {
@@ -68,13 +67,13 @@ impl Transpiler {
                     });
 
                     if is_group {
-                        let globals = convert_global_struct(item_struct, &counter);
-                        globals.into_iter().for_each(|(global_name, global)| {
-                            self.globals.insert(global_name, global);
-                        });
-                        self.global_struct_names.push(item_struct.ident.to_string());
+                        // let globals = convert_global_struct(&item_struct, &counter);
+                        // globals.into_iter().for_each(|(global_name, global)| {
+                        //     self.globals.insert(global_name, global);
+                        // });
+                        self.unfinished_globals.insert(item_struct.ident.to_string(), item_struct.clone());
                     } else { 
-                        let (struct_name, s) = convert_non_global_struct(item_struct);
+                        let (struct_name, s) = convert_non_global_struct(&item_struct);
                         self.structs.insert(struct_name, s);
                     }
                 },
@@ -83,7 +82,7 @@ impl Transpiler {
                 syn::Item::Enum(_item_enum) => todo!(),
                 syn::Item::ExternCrate(_item_extern_crate) => todo!(),
                 syn::Item::Fn(item_fn) => { 
-                    let function = convert_function(&self, item_fn, &self.global_struct_names, &self.entry_point, &self.shader_ty);
+                    let function = convert_function(&mut self, &item_fn);
                     self.functions.insert(function.0, function.1);
                 },
                 syn::Item::ForeignMod(_item_foreign_mod) => todo!("ForeignMod"),

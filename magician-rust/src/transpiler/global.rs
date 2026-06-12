@@ -11,11 +11,8 @@ pub struct FunctionContext {
 }
 
 pub(crate) fn convert_function(
-    transpiler: &Transpiler, 
-    item: &syn::ItemFn, 
-    struct_global_names: &[String],
-    entry_point: &String,
-    shader_ty: &String
+    transpiler: &mut Transpiler, 
+    item: &syn::ItemFn
 ) -> (String, ShaderElement) {
     let mut attrs = Vec::new();
     let mut func = FunctionContext::default();
@@ -26,14 +23,49 @@ pub(crate) fn convert_function(
             syn::FnArg::Receiver(_) => true,
             syn::FnArg::Typed(pat) => {
                 let ty = convert_ty(&pat.ty);
-                let is_global = struct_global_names.contains(&ty);
+                let is_global = transpiler.unfinished_globals.contains_key(&ty);
 
                 if is_global {
                     let name = match &*pat.pat {
                         syn::Pat::Ident(ident) => ident.ident.to_string(),
                         _ => todo!("PatType handler for {item:?}")
                     };
-                    func.global_params.insert(name, ty);
+                    func.global_params.insert(name, ty.clone());
+
+                    let group = pat.attrs.iter()
+                        .filter_map(|attr| {
+                            match &attr.meta {
+                                syn::Meta::Path(_path) => None,
+                                syn::Meta::List(_meta_list) => None,
+                                syn::Meta::NameValue(meta_name_value) => {
+                                    let is_group = meta_name_value.path.segments.last()
+                                        .map(|a| a.ident.to_string() == "group")
+                                        .unwrap_or(false);
+                                    
+                                    if is_group {
+                                        match &meta_name_value.value {
+                                            syn::Expr::Lit(expr_lit) => {
+                                                match &expr_lit.lit {
+                                                    syn::Lit::Int(lit_int) => lit_int.base10_parse::<u32>().ok(),
+                                                    _ => None
+                                                }
+                                            },
+                                            _ => None
+                                        }
+                                    } else { None }
+                                }
+                            }
+                        })
+                        .next();
+
+                    if let Some(group_idx) = group {
+                        if let Some(item_struct) = transpiler.unfinished_globals.remove(&ty) {
+                            let globals = convert_global_struct(&item_struct, group_idx);
+                            globals.into_iter().for_each(|(global_name, global)| {
+                                transpiler.globals.insert(global_name, global);
+                            });
+                        }
+                    } 
                 }
 
                 !is_global
@@ -46,7 +78,7 @@ pub(crate) fn convert_function(
         syn::ReturnType::Type(_, ty) => Some(convert_ty(&*ty))
     };
 
-    if name == *entry_point { attrs.push(Attr { name: shader_ty.clone(), content: "".into() }); }
+    if name == *transpiler.entry_point { attrs.push(Attr { name: transpiler.shader_ty.clone(), content: "".into() }); }
 
     (
         name.clone(),
@@ -75,8 +107,7 @@ pub(crate) fn convert_non_global_struct(item: &syn::ItemStruct) -> (String, Tran
     )
 }
 
-pub(crate) fn convert_global_struct(item: &syn::ItemStruct, group_counter: &AtomicU32) -> Vec<(String, ShaderElement)> {
-    let group = group_counter.fetch_add(1, Ordering::AcqRel);
+pub(crate) fn convert_global_struct(item: &syn::ItemStruct, group: u32) -> Vec<(String, ShaderElement)> {
     let binding_counter = AtomicU32::new(0);
     item.fields.iter()
         .map(|field| convert_global(field, group, &binding_counter))

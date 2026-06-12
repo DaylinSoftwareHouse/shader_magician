@@ -18,8 +18,8 @@ pub struct VertexOutput {
 
 #[shader("./shader_out", vertex)]
 pub fn light_vs_main(
-    cam_in: CameraInput,
-    light_in: LightInput,
+    #[group = 0] cam_in: CameraInput,
+    #[group = 1] light_in: LightInput,
     model: VertexInput
 ) -> VertexOutput {
     let scale = 0.25;
