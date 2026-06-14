@@ -1,4 +1,4 @@
-use magician_vgpu::{BindableObject, VirtualGpu};
+use magician_vgpu::{BindableObject, ImmutableBuffer, VirtualGpu};
 
 use crate::texture;
 
@@ -71,28 +71,6 @@ impl Material {
         diffuse_texture: texture::Texture,
         normal_texture: texture::Texture,
     ) -> Self {
-        // let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        //     layout,
-        //     entries: &[
-        //         wgpu::BindGroupEntry {
-        //             binding: 0,
-        //             resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 1,
-        //             resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 2,
-        //             resource: wgpu::BindingResource::TextureView(&normal_texture.view),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 3,
-        //             resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
-        //         },
-        //     ],
-        //     label: Some(name),
-        // });
         let bindable = BindableObject
             ::<shaders::common::Material>
             ::from_inputs(vgpu, &(
@@ -114,8 +92,8 @@ impl Material {
 pub struct Mesh {
     #[allow(unused)]
     pub name: String,
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
+    pub vertex_buffer: ImmutableBuffer<[ModelVertex]>,
+    pub index_buffer: ImmutableBuffer<[u32]>,
     pub num_elements: u32,
     pub material: usize,
 }

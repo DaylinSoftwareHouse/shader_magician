@@ -91,7 +91,7 @@ impl State {
             ::<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>
             ::new(
                 &vgpu, 
-                instance_data.try_into().unwrap(), 
+                &instance_data.try_into().unwrap(), 
                 wgpu::BufferUsages::VERTEX
             );
 
@@ -286,8 +286,8 @@ impl State {
             pass.pass_mut().set_bind_group(0, self.camera_object.bind_group(), &[]);
             pass.pass_mut().set_bind_group(1, self.light_object.bind_group(), &[]);
             for mesh in &self.obj_model.meshes {
-                pass.pass_mut().set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                pass.pass_mut().set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                pass.pass_mut().set_vertex_buffer(0, mesh.vertex_buffer.buffer().slice(..));
+                pass.pass_mut().set_index_buffer(mesh.index_buffer.buffer().slice(..), wgpu::IndexFormat::Uint32);
                 pass.pass_mut().draw_indexed(0..mesh.num_elements, 0, 0 .. 1);
             }
 
@@ -297,8 +297,8 @@ impl State {
             for mesh in &self.obj_model.meshes {
                 let material = &self.obj_model.materials[mesh.material];
                 pass.pass_mut().set_bind_group(0, Some(material.bindable.bind_group()), &[]);
-                pass.pass_mut().set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                pass.pass_mut().set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                pass.pass_mut().set_vertex_buffer(0, mesh.vertex_buffer.buffer().slice(..));
+                pass.pass_mut().set_index_buffer(mesh.index_buffer.buffer().slice(..), wgpu::IndexFormat::Uint32);
                 pass.pass_mut().draw_indexed(0..mesh.num_elements, 0, 0..self.instances.len() as u32);
             }
         }

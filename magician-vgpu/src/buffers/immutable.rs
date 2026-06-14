@@ -1,22 +1,21 @@
 use std::marker::PhantomData;
 
-use bytemuck::NoUninit;
 use wgpu::util::DeviceExt;
 
-use crate::{Buffer, VirtualGpu};
+use crate::{Buffer, BufferContent, VirtualGpu};
 
 /// An immutable buffer that cannot be written too.
-pub struct ImmutableBuffer<T: NoUninit> {
+pub struct ImmutableBuffer<T: BufferContent + ?Sized> {
     buffer: wgpu::Buffer,
     _phantom: PhantomData<T>
 }
 
-impl <T: NoUninit> ImmutableBuffer<T> {
+impl <T: BufferContent + ?Sized> ImmutableBuffer<T> {
     /// Create a new `ImmutableBuffer` from a `VirtualGPU` reference and some data.
-    pub fn new(vgpu: &VirtualGpu, data: T, usage: wgpu::BufferUsages) -> Self {
+    pub fn new(vgpu: &VirtualGpu, data: &T, usage: wgpu::BufferUsages) -> Self {
         let buffer = vgpu.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light VB"),
-            contents: bytemuck::cast_slice(&[data]),
+            contents: data.as_bytes(),
             usage
         });
 
@@ -29,7 +28,7 @@ impl <T: NoUninit> ImmutableBuffer<T> {
     }
 }
 
-impl <T: NoUninit> Buffer for ImmutableBuffer<T> {
+impl <T: BufferContent + ?Sized> Buffer for ImmutableBuffer<T> {
     type Type = T;
     fn buffer(&self) -> &wgpu::Buffer { &self.buffer }
 }

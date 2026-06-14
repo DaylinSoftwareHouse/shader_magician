@@ -1,7 +1,6 @@
 use std::io::{BufReader, Cursor};
 
-use magician_vgpu::VirtualGpu;
-use wgpu::util::DeviceExt;
+use magician_vgpu::{ImmutableBuffer, VirtualGpu};
 
 use crate::{model, texture};
 
@@ -189,16 +188,9 @@ pub async fn load_model(
                 v.bitangent = (cgmath::Vector3::from(v.bitangent) * denom).into();
             }
 
-            let vertex_buffer = vgpu.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(&format!("{:?} Vertex Buffer", file_name)),
-                contents: bytemuck::cast_slice(&vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-            let index_buffer = vgpu.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(&format!("{:?} Index Buffer", file_name)),
-                contents: bytemuck::cast_slice(&m.mesh.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+            // load buffers
+            let vertex_buffer = ImmutableBuffer::new(vgpu, &vertices[..], wgpu::BufferUsages::VERTEX);
+            let index_buffer = ImmutableBuffer::new(vgpu, &m.mesh.indices[..], wgpu::BufferUsages::INDEX);
 
             model::Mesh {
                 name: file_name.to_string(),
