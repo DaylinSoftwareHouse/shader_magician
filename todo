@@ -11,4 +11,5 @@
 # Pipelines
 [x] Allow for seperate vertex and fragment shaders with custom main functions
 [x] Create solution for texture_bind_group_layout
+[ ] Fix bind group entries (maybe switch to trait style system instead of dependence on macros)
 [ ] Load pipeline parameters from shader macros

@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use magician_macros::ShaderGroup;
 use magician_rust::{Mat4, Vec3, Vec4};
-use magician_vgpu::macros::BindableObject;
+use magician_vgpu::macros::{BindableObject, BufferObject};
 
 #[derive(ShaderGroup, BindableObject)]
 pub struct CameraInput {
