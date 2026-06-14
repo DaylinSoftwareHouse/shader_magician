@@ -2,16 +2,16 @@ use std::cell::RefCell;
 
 use wgpu::util::DeviceExt;
 
-use crate::{Buffer, VirtualGpu, WritableBuffer};
+use crate::{Buffer, BufferContent, VirtualGpu, WritableBuffer};
 
 /// A resizable GPU buffer that holds a single instance of `T`.
-pub struct DynamicBuffer<T: bytemuck::Pod> {
+pub struct DynamicBuffer<T: BufferContent + ?Sized> {
     buffer: RefCell<wgpu::Buffer>,
     usage: wgpu::BufferUsages,
     _marker: std::marker::PhantomData<T>,
 }
 
-impl<T: bytemuck::Pod> DynamicBuffer<T> {
+impl<T: BufferContent + ?Sized> DynamicBuffer<T> {
     /// Create a new `DynamicBuffer` from a `VirtualGpu` instance, some 
     /// data, and how the buffer will be used.
     pub fn new(
@@ -21,7 +21,7 @@ impl<T: bytemuck::Pod> DynamicBuffer<T> {
     ) -> Self {
         let buffer = vgpu.device().create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::bytes_of(data),
+            contents: data.as_bytes(),
             usage: usage | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -33,7 +33,7 @@ impl<T: bytemuck::Pod> DynamicBuffer<T> {
     }
 }
 
-impl<T: bytemuck::Pod> Buffer for DynamicBuffer<T> {
+impl<T: BufferContent + ?Sized> Buffer for DynamicBuffer<T> {
     type Type = T;
 
     fn buffer(&self) -> &wgpu::Buffer {
@@ -47,11 +47,15 @@ impl<T: bytemuck::Pod> Buffer for DynamicBuffer<T> {
         // an Arc<wgpu::Buffer> instead.
         unsafe { &*self.buffer.as_ptr() }
     }
+
+    fn size(&self) -> u32 {
+        (self.buffer.borrow().size() as usize / T::element_size()) as u32
+    }
 }
 
 impl<T: bytemuck::Pod> WritableBuffer for DynamicBuffer<T> {
-    fn write(&self, vgpu: &VirtualGpu, data: Self::Type) -> anyhow::Result<()> {
-        let bytes = bytemuck::bytes_of(&data);
+    fn write(&self, vgpu: &VirtualGpu, data: &Self::Type) -> anyhow::Result<()> {
+        let bytes = data.as_bytes();
         let current_size = self.buffer.borrow().size();
 
         if bytes.len() as u64 == current_size {

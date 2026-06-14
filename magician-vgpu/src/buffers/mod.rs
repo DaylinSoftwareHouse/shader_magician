@@ -17,11 +17,15 @@ pub trait Buffer {
     /// Returns a reference the internal wgpu Buffer
     /// for this buffer.
     fn buffer(&self) -> &wgpu::Buffer;
+
+    /// Returns the size of this buffer in the number
+    /// of elements of type `Type` added to this buffer.
+    fn size(&self) -> u32;
 }
 
 pub trait WritableBuffer: Buffer {
     /// Write an instance of `Type` to this buffer.
-    fn write(&self, vgpu: &VirtualGpu, data: Self::Type) -> anyhow::Result<()>;
+    fn write(&self, vgpu: &VirtualGpu, data: &Self::Type) -> anyhow::Result<()>;
 }
 
 /// Defines an type that may be added to a buffer.
@@ -30,16 +34,25 @@ pub trait WritableBuffer: Buffer {
 /// unsized types to buffers like [T].
 pub trait BufferContent {
     fn as_bytes(&self) -> &[u8];
+    fn element_size() -> usize;
 }
 
 impl<T: NoUninit> BufferContent for T {
     fn as_bytes(&self) -> &[u8] {
         bytemuck::bytes_of(self)
     }
+
+    fn element_size() -> usize {
+        std::mem::size_of::<T>()
+    }
 }
 
 impl<T: NoUninit> BufferContent for [T] {
     fn as_bytes(&self) -> &[u8] {
         bytemuck::cast_slice(self)
+    }
+
+    fn element_size() -> usize {
+        std::mem::size_of::<T>()
     }
 }

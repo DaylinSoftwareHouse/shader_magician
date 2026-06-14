@@ -1,7 +1,7 @@
-use std::{convert::TryInto, sync::Arc};
+use std::sync::Arc;
 
 use magician_vgpu::glam::{Quat, Vec3, Vec4};
-use magician_vgpu::{BindGroupProvider, BindableObject, Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, Pipeline, RenderFrame, ShaderSource, StoreOp, VirtualGpu, WritableBuffer};
+use magician_vgpu::{BindGroupProvider, BindableObject, Buffer, DrawSettings, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, Pipeline, RenderFrame, ShaderSource, StoreOp, VirtualGpu, WritableBuffer};
 use model::Vertex;
 use shaders::common::{Camera, CameraInput, Light, LightInput, Material};
 use winit::application::ApplicationHandler;
@@ -33,9 +33,7 @@ pub struct State {
     camera_uniform: Camera,
     camera_buffer: MutableBuffer<Camera>,
     camera_object: BindableObject<CameraInput>,
-    instances: Vec<Instance>,
-    #[allow(dead_code)]
-    instance_buffer: ImmutableBuffer<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>,
+    instance_buffer: ImmutableBuffer<[InstanceRaw]>,
     depth_texture: magician_vgpu::StaticTexture,
     is_surface_configured: bool,
     light_uniform: Light,
@@ -61,7 +59,7 @@ impl State {
         let camera_uniform = build_camera_from_projection(&camera, &projection);
         let camera_buffer = MutableBuffer
             ::<Camera>
-            ::new(&vgpu, camera_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+            ::new(&vgpu, &camera_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
         let camera_object = BindableObject::<CameraInput>
             ::from_inputs(&vgpu, camera_buffer.buffer());
 
@@ -88,10 +86,10 @@ impl State {
             .collect::<Vec<_>>();
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = ImmutableBuffer
-            ::<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>
+            ::<[InstanceRaw]>
             ::new(
                 &vgpu, 
-                &instance_data.try_into().unwrap(), 
+                instance_data.as_slice(), 
                 wgpu::BufferUsages::VERTEX
             );
 
@@ -108,7 +106,7 @@ impl State {
             _pad1: 0
         };
         let light_buffer = MutableBuffer
-            ::new(&vgpu, light_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+            ::new(&vgpu, &light_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
         let light_object = BindableObject::<LightInput>
             ::from_inputs(&vgpu, light_buffer.buffer());
 
@@ -187,7 +185,6 @@ impl State {
             camera_buffer,
             camera_object,
             camera_uniform,
-            instances,
             instance_buffer,
             depth_texture,
             is_surface_configured: false,
@@ -246,7 +243,7 @@ impl State {
     fn update(&mut self, dt: std::time::Duration) {
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.camera_uniform = build_camera_from_projection(&self.camera, &self.projection);
-        self.camera_buffer.write(&self.vgpu, self.camera_uniform)
+        self.camera_buffer.write(&self.vgpu, &self.camera_uniform)
             .expect("Failed to update camera buffer");
 
         // Update the light
@@ -257,7 +254,7 @@ impl State {
                 dt.as_secs_f32()
             ) * old_position
         ).into();
-        self.light_buffer.write(&self.vgpu, self.light_uniform)
+        self.light_buffer.write(&self.vgpu, &self.light_uniform)
             .expect("Failed to write light buffer");
     }
 
@@ -281,25 +278,32 @@ impl State {
                 })
             );
 
-            pass.pass_mut().set_pipeline(&self.light_render_pipeline.pipeline());
-            pass.pass_mut().set_vertex_buffer(1, self.instance_buffer.buffer().slice(..));
-            pass.pass_mut().set_bind_group(0, self.camera_object.bind_group(), &[]);
-            pass.pass_mut().set_bind_group(1, self.light_object.bind_group(), &[]);
+            pass.use_pipeline(&self.light_render_pipeline);
+            pass.bind(0, &self.camera_object);
+            pass.bind(1, &self.light_object);
             for mesh in &self.obj_model.meshes {
-                pass.pass_mut().set_vertex_buffer(0, mesh.vertex_buffer.buffer().slice(..));
-                pass.pass_mut().set_index_buffer(mesh.index_buffer.buffer().slice(..), wgpu::IndexFormat::Uint32);
-                pass.pass_mut().draw_indexed(0..mesh.num_elements, 0, 0 .. 1);
+                pass.draw(
+                    &mesh.vertex_buffer, &mesh.index_buffer, 
+                    DrawSettings {
+                        instances: Some(0 .. 1),
+                        ..Default::default()
+                    }
+                );
             }
 
-            pass.pass_mut().set_pipeline(&self.render_pipeline.pipeline());
-            pass.pass_mut().set_bind_group(1, self.camera_object.bind_group(), &[]);
-            pass.pass_mut().set_bind_group(2, self.light_object.bind_group(), &[]);    
+            pass.use_pipeline(&self.render_pipeline);
+            pass.bind_instances(&self.instance_buffer);
+            pass.bind(1, &self.camera_object);
+            pass.bind(2, &self.light_object);   
             for mesh in &self.obj_model.meshes {
                 let material = &self.obj_model.materials[mesh.material];
-                pass.pass_mut().set_bind_group(0, Some(material.bindable.bind_group()), &[]);
-                pass.pass_mut().set_vertex_buffer(0, mesh.vertex_buffer.buffer().slice(..));
-                pass.pass_mut().set_index_buffer(mesh.index_buffer.buffer().slice(..), wgpu::IndexFormat::Uint32);
-                pass.pass_mut().draw_indexed(0..mesh.num_elements, 0, 0..self.instances.len() as u32);
+                pass.bind(0, &material.bindable);
+
+                pass.draw(
+                    &mesh.vertex_buffer, 
+                    &mesh.index_buffer, 
+                    DrawSettings::default()
+                );
             }
         }
 
