@@ -62,7 +62,11 @@ impl State {
         let camera_buffer = MutableBuffer
             ::<Camera>
             ::new(&vgpu, camera_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
+        let camera_object = BindableObject::<CameraInput>
+            ::from_inputs(&vgpu, camera_buffer.buffer());
 
+        
+        // create instances
         const SPACE_BETWEEN: f32 = 3.0;
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
@@ -82,7 +86,6 @@ impl State {
                 })
             })
             .collect::<Vec<_>>();
-
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = ImmutableBuffer
             ::<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>
@@ -92,14 +95,12 @@ impl State {
                 wgpu::BufferUsages::VERTEX
             );
 
-        let camera_object = BindableObject::<CameraInput>
-            ::from_inputs(&vgpu, camera_buffer.buffer());
-
         let obj_model =
-            resources::load_model("cube.obj", vgpu.device(), vgpu.queue(), &material_bgl)
+            resources::load_model("cube.obj", &vgpu)
                 .await
                 .unwrap();
 
+        // load light
         let light_uniform = Light {
             position: Vec3::new(2.0, 2.0, 2.0).into(),
             _pad0: 0,
@@ -110,9 +111,8 @@ impl State {
             ::new(&vgpu, light_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
         let light_object = BindableObject::<LightInput>
             ::from_inputs(&vgpu, light_buffer.buffer());
-        // LightInput::Input
 
-
+        // load depth texture
         let depth_texture = texture::Texture::create_depth_texture(
             vgpu.device(), 
             vgpu.config(), 
@@ -170,11 +170,10 @@ impl State {
             .unwrap();
 
             model::Material::new(
-                vgpu.device(),
+                &vgpu,
                 "alt-material",
                 diffuse_texture,
-                normal_texture,
-                &material_bgl,
+                normal_texture
             )
         };
 
@@ -297,7 +296,7 @@ impl State {
             pass.pass_mut().set_bind_group(2, self.light_object.bind_group(), &[]);    
             for mesh in &self.obj_model.meshes {
                 let material = &self.obj_model.materials[mesh.material];
-                pass.pass_mut().set_bind_group(0, &material.bind_group, &[]);
+                pass.pass_mut().set_bind_group(0, Some(material.bindable.bind_group()), &[]);
                 pass.pass_mut().set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
                 pass.pass_mut().set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
                 pass.pass_mut().draw_indexed(0..mesh.num_elements, 0, 0..self.instances.len() as u32);
