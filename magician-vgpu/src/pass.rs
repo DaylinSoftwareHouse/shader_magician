@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{any::TypeId, ops::Range};
 
 use bytemuck::NoUninit;
 use getset::{Getters, MutGetters};
@@ -12,14 +12,22 @@ use crate::{BindGroupProvider, BindableObject, Buffer, Pipeline};
 pub struct SinglePass<'a> {
     #[getset(get = "pub", get_mut = "pub")]
     pass: wgpu::RenderPass<'a>,
+    #[getset(get = "pub", set = "pub")]
+    vertex_slot: u32,
+    #[getset(get = "pub", set = "pub")]
+    indices_slot: u32,
+    current_pipeline: Option<&'a Pipeline>,
     last_instances_size: u32
 }
 
 impl <'a> SinglePass<'a> {
     /// Create from a wgpu `RenderPass`.
     pub(crate) fn new(pass: wgpu::RenderPass<'a>) -> Self {
-        Self { 
+        Self {
             pass,
+            vertex_slot: 0,
+            indices_slot: 1,
+            current_pipeline: None,
             last_instances_size: 1
         }
     }
@@ -29,19 +37,38 @@ impl <'a> SinglePass<'a> {
     /// to prevent drawing instances that do not exist.
     pub fn use_pipeline(
         &mut self,
-        pipeline: &Pipeline
+        pipeline: &'a Pipeline
     ) {
         self.pass_mut().set_pipeline(&pipeline.pipeline());
+        self.current_pipeline = Some(pipeline);
         self.last_instances_size = 1;
     }
 
-    /// Bind a bindable object to a specific index.
-    pub fn bind<T: BindGroupProvider>(
+    /// Bind a bindable object to this pass.  The index for which
+    /// will be pulled from the last set pipeline.  If no pipeline
+    /// has been set previously, this function will return false. If
+    /// no index can be found in the pipeline for this object, false
+    /// will also be returned.
+    pub fn bind<T: BindGroupProvider + 'static>(
+        &mut self,
+        bindable: &BindableObject<T>
+    ) -> bool {
+        let Some(pipeline) = self.current_pipeline.as_ref()
+            else { return false };
+        let type_id = TypeId::of::<T>();
+        let Some(index) = pipeline.slot_map().get(&type_id)
+            else { return false };
+        self.pass_mut().set_bind_group(*index, bindable.bind_group(), &[]);
+        return true;
+    }
+
+    /// Bind a `wgpu::BindGroup` to a specific index.
+    pub fn bind_raw<T: BindGroupProvider>(
         &mut self,
         index: u32,
-        bindable: &BindableObject<T>
+        bindable: &wgpu::BindGroup
     ) {
-        self.pass_mut().set_bind_group(index, bindable.bind_group(), &[]);
+        self.pass_mut().set_bind_group(index, bindable, &[]);
     }
 
     /// Bind an instances buffer to vertex buffer slot 1.
@@ -49,7 +76,8 @@ impl <'a> SinglePass<'a> {
         &mut self,
         buffer: &dyn Buffer<Type = [T]>
     ) {
-        self.pass_mut().set_vertex_buffer(1, buffer.buffer().slice(..));
+        let slot = self.indices_slot;
+        self.pass_mut().set_vertex_buffer(slot, buffer.buffer().slice(..));
         self.last_instances_size = buffer.size();
     }
 
@@ -77,7 +105,8 @@ impl <'a> SinglePass<'a> {
             .unwrap_or_else(|| 0 .. self.last_instances_size);
 
         // perform draw
-        self.pass_mut().set_vertex_buffer(0, vertices.buffer().slice(..));
+        let slot = self.vertex_slot;
+        self.pass_mut().set_vertex_buffer(slot, vertices.buffer().slice(..));
         self.pass_mut().set_index_buffer(indices.buffer().slice(..), index_fmt);
         self.pass_mut().draw_indexed(indices_range, settings.base_vertex, instances_range);
     }

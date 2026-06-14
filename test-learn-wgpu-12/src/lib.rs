@@ -279,8 +279,8 @@ impl State {
             );
 
             pass.use_pipeline(&self.light_render_pipeline);
-            pass.bind(0, &self.camera_object);
-            pass.bind(1, &self.light_object);
+            pass.bind(&self.camera_object);
+            pass.bind(&self.light_object);
             for mesh in &self.obj_model.meshes {
                 pass.draw(
                     &mesh.vertex_buffer, &mesh.index_buffer, 
@@ -293,11 +293,10 @@ impl State {
 
             pass.use_pipeline(&self.render_pipeline);
             pass.bind_instances(&self.instance_buffer);
-            pass.bind(1, &self.camera_object);
-            pass.bind(2, &self.light_object);   
+            pass.bind(&self.camera_object);
+            pass.bind(&self.light_object);   
             for mesh in &self.obj_model.meshes {
-                let material = &self.obj_model.materials[mesh.material];
-                pass.bind(0, &material.bindable);
+                pass.bind(&self.obj_model.materials[mesh.material].bindable);
 
                 pass.draw(
                     &mesh.vertex_buffer, 
