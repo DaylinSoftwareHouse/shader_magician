@@ -1,10 +1,9 @@
-use std::any::Any;
 use std::{convert::TryInto, sync::Arc};
 
 use magician_vgpu::glam::{Quat, Vec3, Vec4};
-use magician_vgpu::{BindableObject, Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, Pipeline, RenderFrame, ShaderSource, StoreOp, VirtualGpu, WritableBuffer};
+use magician_vgpu::{BindGroupProvider, BindableObject, Buffer, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, Pipeline, RenderFrame, ShaderSource, StoreOp, VirtualGpu, WritableBuffer};
 use model::Vertex;
-use shaders::common::{Camera, CameraInput, Light, LightInput};
+use shaders::common::{Camera, CameraInput, Light, LightInput, Material};
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
@@ -52,53 +51,13 @@ impl State {
     async fn new(window: Arc<Window>) -> anyhow::Result<State> {
         let vgpu = VirtualGpu::new(window).await;
 
-        let texture_bind_group_layout =
-            vgpu.device().create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                    // normal map
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 3,
-                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
+        let material_bgl = Material::layout(&vgpu, wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX);
 
         // create camera
         let camera = camera::Camera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
         let projection =
             camera::Projection::new(vgpu.config().width, vgpu.config().height, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera::CameraController::new(4.0, 0.4);
-        // let mut camera_uniform = Camera::new();
-        // camera_uniform.update_view_proj(&camera, &projection);
         let camera_uniform = build_camera_from_projection(&camera, &projection);
         let camera_buffer = MutableBuffer
             ::<Camera>
@@ -137,7 +96,7 @@ impl State {
             ::from_inputs(&vgpu, camera_buffer.buffer());
 
         let obj_model =
-            resources::load_model("cube.obj", vgpu.device(), vgpu.queue(), &texture_bind_group_layout)
+            resources::load_model("cube.obj", vgpu.device(), vgpu.queue(), &material_bgl)
                 .await
                 .unwrap();
 
@@ -171,7 +130,7 @@ impl State {
             .depth_format(texture::Texture::DEPTH_FORMAT)
             .vertex(model::ModelVertex::desc())
             .vertex(InstanceRaw::desc())
-            .layout_raw(texture_bind_group_layout.type_id(), &texture_bind_group_layout)
+            .layout_raw::<Material>(&material_bgl)
             .layout(&camera_object)
             .layout(&light_object)
             .build(&vgpu);
@@ -215,7 +174,7 @@ impl State {
                 "alt-material",
                 diffuse_texture,
                 normal_texture,
-                &texture_bind_group_layout,
+                &material_bgl,
             )
         };
 

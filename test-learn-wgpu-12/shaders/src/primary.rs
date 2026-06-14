@@ -1,7 +1,7 @@
 use magician_macros::*;
 use magician_rust::*;
 
-use crate::common::{CameraInput, LightInput};
+use crate::common::{CameraInput, LightInput, Material};
 
 
 #[derive(ShaderLayout)]
@@ -62,15 +62,6 @@ pub fn primary_vs_main(
         tangent_light_position: tangent_matrix * cam_in.camera.view_pos.xyz(), 
         tangent_view_position: tangent_matrix * light_in.light.position 
     };
-}
-
-
-#[derive(ShaderGroup)]
-pub struct Material {
-    t_diffuse: Texture2D,
-    s_diffuse: Sampler,
-    t_normal: Texture2D,
-    s_normal: Sampler
 }
 
 #[allow(unused)]

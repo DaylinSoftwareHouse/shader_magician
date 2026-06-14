@@ -36,7 +36,7 @@ pub fn bindable_object(input: TokenStream) -> TokenStream {
             quote! {
                 [
                     #(
-                        #fields::group_entry(vgpu, #field_idx, input.#field_idx)
+                        #fields::group_entry(vgpu, #field_idx, &input.#field_idx)
                     ),*
                 ]
             }

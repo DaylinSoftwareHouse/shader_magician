@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use getset::{Getters, MutGetters};
+use magician_rust::{Sampler, Texture2D};
 
 use crate::{VirtualGpu};
 
@@ -68,4 +69,65 @@ pub trait BindGroupProvider {
         layout: &'a wgpu::BindGroupLayout,
         input: &'a Self::Input
     ) -> wgpu::BindGroup;
+}
+
+
+
+
+impl BindGroupPart for Texture2D {
+    type PartInput = wgpu::TextureView;
+
+    fn layout_entry(
+        _vgpu: &VirtualGpu,
+        binding: u32, 
+        visibility: wgpu::ShaderStages
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding, visibility,
+            count: None,
+            ty: wgpu::BindingType::Texture {
+                multisampled: false,
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+            }
+        }
+    }
+
+    fn group_entry<'a>(
+        _vgpu: &'a VirtualGpu,
+        binding: u32,
+        input: &'a Self::PartInput
+    ) -> wgpu::BindGroupEntry<'a> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::TextureView(input),
+        }
+    }
+}
+
+impl BindGroupPart for Sampler {
+    type PartInput = wgpu::Sampler;
+
+    fn layout_entry(
+        _vgpu: &VirtualGpu,
+        binding: u32, 
+        visibility: wgpu::ShaderStages
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding, visibility,
+            count: None,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+        }
+    }
+
+    fn group_entry<'a>(
+        _vgpu: &'a VirtualGpu,
+        binding: u32,
+        input: &'a Self::PartInput
+    ) -> wgpu::BindGroupEntry<'a> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Sampler(input),
+        }
+    }
 }
