@@ -15,11 +15,26 @@ pub fn bindable_object(input: TokenStream) -> TokenStream {
         if fields.len() <= 0 { quote! { () } }
         else if fields.len() == 1 {
             let field_ty = &fields[0];
-            quote! { dyn magician_vgpu::Buffer<Type = #field_ty> }
-        } else { quote! { (#(dyn magician_vgpu::Buffer<Type = #fields>),*) } };
+            quote! { #field_ty }
+        } else { quote! { (#(#fields),*) } };
 
     TokenStream::from(quote! {
-        
+        // impl magician_vgpu::BindGroupProvider<#inputs> for #name {
+        //     fn layout(
+        //         vgpu: &magician_vgpu::VirtualGpu,
+        //         visibility: wgpu::ShaderStages
+        //     ) -> wgpu::BindGroupLayout {
+        //         #inputs::layout(vgpu, visibility)
+        //     }
+
+        //     fn group(
+        //         vgpu: &VirtualGpu,
+        //         layout: &wgpu::BindGroupLayout,
+        //         input: &B
+        //     ) -> wgpu::BindGroup {
+        //         #inputs::group(vgpu, layout, input)
+        //     }
+        // }
     })
 }
 

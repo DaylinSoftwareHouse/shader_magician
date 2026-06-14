@@ -72,7 +72,7 @@ impl <'a> PipelineBuilder<'a> {
     }
 
     /// Add a bind group layout from a bindable object to this builder.
-    pub fn layout<T: BindGroupProvider + 'static>(mut self, object: &'a BindableObject<T>) -> Self {
+    pub fn layout<T: BindGroupProvider<A> + 'static, A>(mut self, object: &'a BindableObject<T, A>) -> Self {
         let type_id = TypeId::of::<T>();
         let id = self.slot_map.len();
         self.slot_map.insert(type_id, (id as u32, object.layout()));

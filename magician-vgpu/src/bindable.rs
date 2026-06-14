@@ -5,22 +5,22 @@ use getset::{Getters, MutGetters};
 use crate::{Buffer, VirtualGpu};
 
 #[derive(Getters, MutGetters)]
-pub struct BindableObject<G: BindGroupProvider> {
+pub struct BindableObject<G: BindGroupProvider<A>, A> {
     #[getset(get = "pub", get_mut = "pub")]
     bind_group: wgpu::BindGroup,
     #[getset(get = "pub", get_mut = "pub")]
     layout: wgpu::BindGroupLayout,
-    _phantom: PhantomData<G>
+    _phantom: PhantomData<(G, A)>
 }
 
-impl <G: BindGroupProvider> BindableObject<G> {
+impl <G: BindGroupProvider<A>, A> BindableObject<G, A> {
     pub fn new(bind_group: wgpu::BindGroup, layout: wgpu::BindGroupLayout) -> Self {
         Self { bind_group, layout, _phantom: PhantomData::default() }
     }
 
     pub fn from_inputs(
         vgpu: &VirtualGpu, 
-        inputs: &G::INPUTS
+        inputs: &A
     ) -> Self {
         let layout = G::layout(vgpu, wgpu::ShaderStages::all());
         let group = G::group(vgpu, &layout, inputs);
@@ -29,8 +29,7 @@ impl <G: BindGroupProvider> BindableObject<G> {
 }
 
 
-pub trait BindGroupPart {
-    type INPUT;
+pub trait BindGroupPart<I> {
 
     /// Create an entry for a `wgpu::BindGroupLayout` for this part of the
     /// bind group.
@@ -45,14 +44,12 @@ pub trait BindGroupPart {
     fn group_entry<'a>(
         vgpu: &'a VirtualGpu,
         binding: u32,
-        input: &'a Self::INPUT
+        input: &'a I
     ) -> wgpu::BindGroupEntry<'a>;
 }
 
 
-pub trait BindGroupProvider {
-    type INPUTS;
-
+pub trait BindGroupProvider<I> {
     /// Create a `wgpu::BindGroupLayout` from a `VirtualGpu` ref, and some visibility flags.
     /// These visibilty flags tell WGPU what shaders should have access to this layout.
     fn layout(
@@ -66,14 +63,12 @@ pub trait BindGroupProvider {
     fn group<'a>(
         vgpu: &'a VirtualGpu,
         layout: &'a wgpu::BindGroupLayout,
-        input: &'a Self::INPUTS
+        input: &'a I
     ) -> wgpu::BindGroup;
 }
 
 
-impl <BUFFER: Buffer> BindGroupPart for BUFFER {
-    type INPUT = BUFFER;
-
+impl <BUFFER: Buffer> BindGroupPart<BUFFER> for BUFFER {
     fn layout_entry(
         _vgpu: &VirtualGpu,
         binding: u32, 
@@ -93,7 +88,7 @@ impl <BUFFER: Buffer> BindGroupPart for BUFFER {
     fn group_entry<'a>(
         _vgpu: &'a VirtualGpu,
         binding: u32,
-        input: &'a Self::INPUT
+        input: &'a BUFFER
     ) -> wgpu::BindGroupEntry<'a> {
         wgpu::BindGroupEntry {
             binding,
@@ -103,9 +98,7 @@ impl <BUFFER: Buffer> BindGroupPart for BUFFER {
 }
 
 
-impl <A: BindGroupPart> BindGroupProvider for A {
-    type INPUTS = A::INPUT;
-
+impl <A: BindGroupPart<B>, B> BindGroupProvider<B> for A {
     fn layout(
         vgpu: &VirtualGpu,
         visibility: wgpu::ShaderStages
@@ -123,7 +116,7 @@ impl <A: BindGroupPart> BindGroupProvider for A {
     fn group(
         vgpu: &VirtualGpu,
         layout: &wgpu::BindGroupLayout,
-        input: &Self::INPUTS
+        input: &B
     ) -> wgpu::BindGroup {
         vgpu.device().create_bind_group(
             &wgpu::BindGroupDescriptor {

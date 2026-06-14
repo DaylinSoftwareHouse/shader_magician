@@ -33,7 +33,7 @@ pub struct State {
     camera_controller: camera::CameraController, 
     camera_uniform: Camera,
     camera_buffer: MutableBuffer<Camera>,
-    camera_object: BindableObject<MutableBuffer<Camera>>,
+    camera_object: BindableObject<MutableBuffer<Camera>, MutableBuffer<Camera>>,
     instances: Vec<Instance>,
     #[allow(dead_code)]
     instance_buffer: ImmutableBuffer<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>,
@@ -41,7 +41,7 @@ pub struct State {
     is_surface_configured: bool,
     light_uniform: Light,
     light_buffer: MutableBuffer<Light>,
-    light_object: BindableObject<MutableBuffer<Light>>,
+    light_object: BindableObject<MutableBuffer<Light>, MutableBuffer<Light>>,
     light_render_pipeline: Pipeline,
     #[allow(dead_code)]
     debug_material: model::Material,
