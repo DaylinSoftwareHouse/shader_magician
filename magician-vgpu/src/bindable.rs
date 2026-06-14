@@ -68,36 +68,6 @@ pub trait BindGroupProvider<I> {
 }
 
 
-impl <BUFFER: Buffer> BindGroupPart<BUFFER> for BUFFER {
-    fn layout_entry(
-        _vgpu: &VirtualGpu,
-        binding: u32, 
-        visibility: wgpu::ShaderStages
-    ) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
-            binding, visibility,
-            count: None,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None
-            }
-        }
-    }
-
-    fn group_entry<'a>(
-        _vgpu: &'a VirtualGpu,
-        binding: u32,
-        input: &'a BUFFER
-    ) -> wgpu::BindGroupEntry<'a> {
-        wgpu::BindGroupEntry {
-            binding,
-            resource: input.buffer().as_entire_binding()
-        }
-    }
-}
-
-
 impl <A: BindGroupPart<B>, B> BindGroupProvider<B> for A {
     fn layout(
         vgpu: &VirtualGpu,

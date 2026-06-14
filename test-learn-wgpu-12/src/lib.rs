@@ -133,7 +133,7 @@ impl State {
                 wgpu::BufferUsages::VERTEX
             );
 
-        let camera_object = BindableObject::from_inputs::<MutableBuffer<Camera>>(&vgpu, &camera_buffer);
+        let camera_object = BindableObject::from_inputs::<Camera>(&vgpu, &camera_buffer);
 
         let obj_model =
             resources::load_model("cube.obj", vgpu.device(), vgpu.queue(), &texture_bind_group_layout)
@@ -148,7 +148,7 @@ impl State {
         };
         let light_buffer = MutableBuffer
             ::new(&vgpu, light_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
-        let light_object = BindableObject::from_inputs::<MutableBuffer<Light>>(&vgpu, &light_buffer);
+        let light_object = BindableObject::from_inputs::<Light>(&vgpu, &light_buffer);
 
 
         let depth_texture = texture::Texture::create_depth_texture(

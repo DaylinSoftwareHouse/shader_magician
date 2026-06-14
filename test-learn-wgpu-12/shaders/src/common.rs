@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use magician_macros::ShaderGroup;
 use magician_rust::{Mat4, Vec3, Vec4};
-use magician_vgpu::macros::BindableObject;
+use magician_vgpu::macros::{BindableObject, UniformBufferObject};
 
 #[derive(ShaderGroup, BindableObject)]
 pub struct CameraInput {
@@ -9,7 +9,7 @@ pub struct CameraInput {
 }
 
 #[repr(C)]
-#[derive(Pod, Zeroable, Clone, Copy)]
+#[derive(Pod, Zeroable, Clone, Copy, UniformBufferObject)]
 pub struct Camera {
     pub view_pos: Vec4,
     pub view_proj: Mat4
@@ -22,7 +22,7 @@ pub struct LightInput {
 }
 
 #[repr(C)]
-#[derive(Pod, Zeroable, Clone, Copy)]
+#[derive(Pod, Zeroable, Clone, Copy, UniformBufferObject)]
 pub struct Light {
     pub position: Vec3,
     pub _pad0: u32,

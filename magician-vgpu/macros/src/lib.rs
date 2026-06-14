@@ -38,27 +38,38 @@ pub fn bindable_object(input: TokenStream) -> TokenStream {
     })
 }
 
-#[proc_macro_derive(BufferObject)]
+#[proc_macro_derive(UniformBufferObject)]
 pub fn buffer_object(input: TokenStream) -> TokenStream {
     let item = parse_macro_input!(input as ItemStruct);
     let name = item.ident.clone();
     
     TokenStream::from(quote! {
-        impl <B: magician_vgpu::Buffer<Type = #name>> magician_vgpu::bindable::BindGroupPart<B> for #name {
+        impl <BUFFER: magician_vgpu::Buffer> magician_vgpu::bindable::BindGroupPart<BUFFER> for #name {
             fn layout_entry(
                 vgpu: &magician_vgpu::VirtualGpu,
                 binding: u32, 
                 visibility: wgpu::ShaderStages
             ) -> wgpu::BindGroupLayoutEntry {
-                B::layout_entry(vgpu, binding, visibility)
+                wgpu::BindGroupLayoutEntry {
+                    binding, visibility,
+                    count: None,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None
+                    }
+                }
             }
 
             fn group_entry<'a>(
                 vgpu: &'a magician_vgpu::VirtualGpu,
                 binding: u32,
-                input: &'a B
+                input: &'a BUFFER
             ) -> wgpu::BindGroupEntry<'a> {
-                B::group_entry(vgpu, binding, input)
+                wgpu::BindGroupEntry {
+                    binding,
+                    resource: input.buffer().as_entire_binding()
+                }
             }
         }
     })
