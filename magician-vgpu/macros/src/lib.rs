@@ -10,31 +10,70 @@ pub fn bindable_object(input: TokenStream) -> TokenStream {
     let fields = item.fields.iter()
         .map(|field| field.ty.clone())
         .collect::<Vec<_>>();
+    let field_idx = (0 .. fields.len() as u32).map(|a| LitInt::new(&a.to_string(), Span::call_site())).collect::<Vec<_>>();
 
-    let inputs = 
-        if fields.len() <= 0 { quote! { () } }
+    let inputs = quote! { (#(magician_vgpu::MutableBuffer<#fields>),*) };
+
+    let entries = quote! {
+        [
+            #(
+                #fields::layout_entry(vgpu, #field_idx, visibility)
+            ),*
+        ]
+    };
+
+    let groups = 
+        if fields.len() == 0 { quote! { [] } }
         else if fields.len() == 1 {
-            let field_ty = &fields[0];
-            quote! { #field_ty }
-        } else { quote! { (#(#fields),*) } };
+            quote! {
+                [
+                    #(
+                        #fields::group_entry(vgpu, #field_idx, input)
+                    ),*
+                ]
+            }
+        } else {
+            quote! {
+                [
+                    #(
+                        #fields::group_entry(vgpu, #field_idx, input.#field_idx)
+                    ),*
+                ]
+            }
+        };
 
     TokenStream::from(quote! {
-        // impl magician_vgpu::BindGroupProvider<#inputs> for #name {
-        //     fn layout(
-        //         vgpu: &magician_vgpu::VirtualGpu,
-        //         visibility: wgpu::ShaderStages
-        //     ) -> wgpu::BindGroupLayout {
-        //         #inputs::layout(vgpu, visibility)
-        //     }
+        impl magician_vgpu::BindGroupProvider for #name {
+            type Input = #inputs;
 
-        //     fn group(
-        //         vgpu: &VirtualGpu,
-        //         layout: &wgpu::BindGroupLayout,
-        //         input: &B
-        //     ) -> wgpu::BindGroup {
-        //         #inputs::group(vgpu, layout, input)
-        //     }
-        // }
+            fn layout(
+                vgpu: &magician_vgpu::VirtualGpu,
+                visibility: wgpu::ShaderStages
+            ) -> wgpu::BindGroupLayout {
+                use magician_vgpu::bindable::BindGroupPart;
+                vgpu.device().create_bind_group_layout(
+                    &wgpu::BindGroupLayoutDescriptor {
+                        label: None,
+                        entries: &#entries
+                    }
+                )
+            }
+
+            fn group(
+                vgpu: &magician_vgpu::VirtualGpu,
+                layout: &wgpu::BindGroupLayout,
+                input: &#inputs
+            ) -> wgpu::BindGroup {
+                use magician_vgpu::BindGroupPart;
+                vgpu.device().create_bind_group(
+                    &wgpu::BindGroupDescriptor {
+                        layout: &layout,
+                        label: None,
+                        entries: &#groups
+                    }
+                )
+            }
+        }
     })
 }
 
@@ -44,7 +83,7 @@ pub fn buffer_object(input: TokenStream) -> TokenStream {
     let name = item.ident.clone();
     
     TokenStream::from(quote! {
-        impl <BUFFER: magician_vgpu::Buffer> magician_vgpu::bindable::BindGroupPart<BUFFER> for #name {
+        impl magician_vgpu::bindable::BindGroupPart<magician_vgpu::MutableBuffer<#name>> for #name {
             fn layout_entry(
                 vgpu: &magician_vgpu::VirtualGpu,
                 binding: u32, 
@@ -64,8 +103,9 @@ pub fn buffer_object(input: TokenStream) -> TokenStream {
             fn group_entry<'a>(
                 vgpu: &'a magician_vgpu::VirtualGpu,
                 binding: u32,
-                input: &'a BUFFER
+                input: &'a magician_vgpu::MutableBuffer<#name>
             ) -> wgpu::BindGroupEntry<'a> {
+                use magician_vgpu::Buffer;
                 wgpu::BindGroupEntry {
                     binding,
                     resource: input.buffer().as_entire_binding()

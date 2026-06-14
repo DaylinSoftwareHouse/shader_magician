@@ -2,27 +2,27 @@ use std::marker::PhantomData;
 
 use getset::{Getters, MutGetters};
 
-use crate::{Buffer, VirtualGpu};
+use crate::{VirtualGpu};
 
 #[derive(Getters, MutGetters)]
-pub struct BindableObject<A> {
+pub struct BindableObject<G: BindGroupProvider> {
     #[getset(get = "pub", get_mut = "pub")]
     bind_group: wgpu::BindGroup,
     #[getset(get = "pub", get_mut = "pub")]
     layout: wgpu::BindGroupLayout,
-    _phantom: PhantomData<A>
+    _phantom: PhantomData<G>
 }
 
-impl <A> BindableObject<A> {
+impl <G: BindGroupProvider> BindableObject<G> {
     pub fn new(bind_group: wgpu::BindGroup, layout: wgpu::BindGroupLayout) -> Self {
         Self { bind_group, layout, _phantom: PhantomData::default() }
     }
 
-    pub fn from_inputs<G: BindGroupProvider<A>>(
+    pub fn from_inputs(
         vgpu: &VirtualGpu, 
-        inputs: &A
+        inputs: &G::Input
     ) -> Self {
-        let layout = G::layout(vgpu, wgpu::ShaderStages::all());
+        let layout = G::layout(vgpu, wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX);
         let group = G::group(vgpu, &layout, inputs);
         return Self::new(group, layout);
     }
@@ -49,7 +49,9 @@ pub trait BindGroupPart<I> {
 }
 
 
-pub trait BindGroupProvider<I> {
+pub trait BindGroupProvider {
+    type Input;
+
     /// Create a `wgpu::BindGroupLayout` from a `VirtualGpu` ref, and some visibility flags.
     /// These visibilty flags tell WGPU what shaders should have access to this layout.
     fn layout(
@@ -63,39 +65,6 @@ pub trait BindGroupProvider<I> {
     fn group<'a>(
         vgpu: &'a VirtualGpu,
         layout: &'a wgpu::BindGroupLayout,
-        input: &'a I
+        input: &'a Self::Input
     ) -> wgpu::BindGroup;
-}
-
-
-impl <A: BindGroupPart<B>, B> BindGroupProvider<B> for A {
-    fn layout(
-        vgpu: &VirtualGpu,
-        visibility: wgpu::ShaderStages
-    ) -> wgpu::BindGroupLayout {
-        vgpu.device().create_bind_group_layout(
-            &wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[
-                    A::layout_entry(vgpu, 0, visibility)
-                ]
-            }
-        )
-    }
-
-    fn group(
-        vgpu: &VirtualGpu,
-        layout: &wgpu::BindGroupLayout,
-        input: &B
-    ) -> wgpu::BindGroup {
-        vgpu.device().create_bind_group(
-            &wgpu::BindGroupDescriptor {
-                layout: &layout,
-                label: None,
-                entries: &[
-                    A::group_entry(vgpu, 0, input)
-                ]
-            }
-        )
-    }
 }
