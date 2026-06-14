@@ -29,7 +29,8 @@ impl <G: BindGroupProvider> BindableObject<G> {
 }
 
 
-pub trait BindGroupPart<I> {
+pub trait BindGroupPart {
+    type PartInput;
 
     /// Create an entry for a `wgpu::BindGroupLayout` for this part of the
     /// bind group.
@@ -44,7 +45,7 @@ pub trait BindGroupPart<I> {
     fn group_entry<'a>(
         vgpu: &'a VirtualGpu,
         binding: u32,
-        input: &'a I
+        input: &'a Self::PartInput
     ) -> wgpu::BindGroupEntry<'a>;
 }
 

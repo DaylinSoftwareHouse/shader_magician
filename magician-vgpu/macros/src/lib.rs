@@ -12,7 +12,7 @@ pub fn bindable_object(input: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     let field_idx = (0 .. fields.len() as u32).map(|a| LitInt::new(&a.to_string(), Span::call_site())).collect::<Vec<_>>();
 
-    let inputs = quote! { (#(magician_vgpu::MutableBuffer<#fields>),*) };
+    let inputs = quote! { (#(<#fields as magician_vgpu::bindable::BindGroupPart>::PartInput),*) };
 
     let entries = quote! {
         [
@@ -83,7 +83,9 @@ pub fn buffer_object(input: TokenStream) -> TokenStream {
     let name = item.ident.clone();
     
     TokenStream::from(quote! {
-        impl magician_vgpu::bindable::BindGroupPart<magician_vgpu::MutableBuffer<#name>> for #name {
+        impl magician_vgpu::bindable::BindGroupPart for #name {
+            type PartInput = wgpu::Buffer;
+            
             fn layout_entry(
                 vgpu: &magician_vgpu::VirtualGpu,
                 binding: u32, 
@@ -103,12 +105,12 @@ pub fn buffer_object(input: TokenStream) -> TokenStream {
             fn group_entry<'a>(
                 vgpu: &'a magician_vgpu::VirtualGpu,
                 binding: u32,
-                input: &'a magician_vgpu::MutableBuffer<#name>
+                input: &'a Self::PartInput
             ) -> wgpu::BindGroupEntry<'a> {
                 use magician_vgpu::Buffer;
                 wgpu::BindGroupEntry {
                     binding,
-                    resource: input.buffer().as_entire_binding()
+                    resource: input.as_entire_binding()
                 }
             }
         }

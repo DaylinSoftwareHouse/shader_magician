@@ -134,7 +134,7 @@ impl State {
             );
 
         let camera_object = BindableObject::<CameraInput>
-            ::from_inputs(&vgpu, &camera_buffer);
+            ::from_inputs(&vgpu, camera_buffer.buffer());
 
         let obj_model =
             resources::load_model("cube.obj", vgpu.device(), vgpu.queue(), &texture_bind_group_layout)
@@ -150,7 +150,7 @@ impl State {
         let light_buffer = MutableBuffer
             ::new(&vgpu, light_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
         let light_object = BindableObject::<LightInput>
-            ::from_inputs(&vgpu, &light_buffer);
+            ::from_inputs(&vgpu, light_buffer.buffer());
         // LightInput::Input
 
 
