@@ -33,7 +33,7 @@ pub struct State {
     camera_controller: camera::CameraController, 
     camera_uniform: Camera,
     camera_buffer: MutableBuffer<Camera>,
-    camera_object: BindableObject<MutableBuffer<Camera>, MutableBuffer<Camera>>,
+    camera_object: BindableObject<MutableBuffer<Camera>>,
     instances: Vec<Instance>,
     #[allow(dead_code)]
     instance_buffer: ImmutableBuffer<[InstanceRaw; NUM_INSTANCES_PER_ROW * NUM_INSTANCES_PER_ROW]>,
@@ -41,7 +41,7 @@ pub struct State {
     is_surface_configured: bool,
     light_uniform: Light,
     light_buffer: MutableBuffer<Light>,
-    light_object: BindableObject<MutableBuffer<Light>, MutableBuffer<Light>>,
+    light_object: BindableObject<MutableBuffer<Light>>,
     light_render_pipeline: Pipeline,
     #[allow(dead_code)]
     debug_material: model::Material,
@@ -133,7 +133,7 @@ impl State {
                 wgpu::BufferUsages::VERTEX
             );
 
-        let camera_object = BindableObject::from_inputs(&vgpu, &camera_buffer);
+        let camera_object = BindableObject::from_inputs::<MutableBuffer<Camera>>(&vgpu, &camera_buffer);
 
         let obj_model =
             resources::load_model("cube.obj", vgpu.device(), vgpu.queue(), &texture_bind_group_layout)
@@ -148,7 +148,7 @@ impl State {
         };
         let light_buffer = MutableBuffer
             ::new(&vgpu, light_uniform, wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST);
-        let light_object = BindableObject::from_inputs(&vgpu, &light_buffer);
+        let light_object = BindableObject::from_inputs::<MutableBuffer<Light>>(&vgpu, &light_buffer);
 
 
         let depth_texture = texture::Texture::create_depth_texture(

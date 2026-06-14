@@ -3,7 +3,7 @@ use std::any::TypeId;
 use ahash::AHashMap;
 use getset::{Getters, MutGetters};
 
-use crate::{BindGroupProvider, BindableObject, VirtualGpu};
+use crate::{BindableObject, VirtualGpu};
 
 /// A wrapper around `wgpu::RenderPipeline` that ensures type safety and ease
 /// of use for Pipelines.
@@ -72,7 +72,7 @@ impl <'a> PipelineBuilder<'a> {
     }
 
     /// Add a bind group layout from a bindable object to this builder.
-    pub fn layout<T: BindGroupProvider<A> + 'static, A>(mut self, object: &'a BindableObject<T, A>) -> Self {
+    pub fn layout<T: 'static>(mut self, object: &'a BindableObject<T>) -> Self {
         let type_id = TypeId::of::<T>();
         let id = self.slot_map.len();
         self.slot_map.insert(type_id, (id as u32, object.layout()));

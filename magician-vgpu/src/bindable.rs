@@ -5,20 +5,20 @@ use getset::{Getters, MutGetters};
 use crate::{Buffer, VirtualGpu};
 
 #[derive(Getters, MutGetters)]
-pub struct BindableObject<G: BindGroupProvider<A>, A> {
+pub struct BindableObject<A> {
     #[getset(get = "pub", get_mut = "pub")]
     bind_group: wgpu::BindGroup,
     #[getset(get = "pub", get_mut = "pub")]
     layout: wgpu::BindGroupLayout,
-    _phantom: PhantomData<(G, A)>
+    _phantom: PhantomData<A>
 }
 
-impl <G: BindGroupProvider<A>, A> BindableObject<G, A> {
+impl <A> BindableObject<A> {
     pub fn new(bind_group: wgpu::BindGroup, layout: wgpu::BindGroupLayout) -> Self {
         Self { bind_group, layout, _phantom: PhantomData::default() }
     }
 
-    pub fn from_inputs(
+    pub fn from_inputs<G: BindGroupProvider<A>>(
         vgpu: &VirtualGpu, 
         inputs: &A
     ) -> Self {
