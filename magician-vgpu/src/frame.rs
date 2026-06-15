@@ -5,18 +5,16 @@ use magician_rust::glam::Vec4;
 use crate::{PassAttachment, SinglePass, VirtualGpu};
 
 #[derive(Getters, MutGetters)]
-pub struct RenderFrame<'a> {
+pub struct RenderFrame {
     #[getset(get = "pub", get_mut = "pub")]
     output: wgpu::SurfaceTexture,
     #[getset(get = "pub", get_mut = "pub")]
     view: wgpu::TextureView,
     #[getset(get = "pub", get_mut = "pub")]
-    encoder: wgpu::CommandEncoder,
-
-    pub(crate) vgpu: &'a VirtualGpu
+    encoder: wgpu::CommandEncoder
 }
 
-impl <'a> RenderFrame<'a> {
+impl RenderFrame {
     /// Start a render frame from a reference to a virtual GPU.
     /// This creates a new `RenderFrame` instance that may be used
     /// for rendering your next frame.
@@ -30,7 +28,7 @@ impl <'a> RenderFrame<'a> {
     ///         VirtualGpu is still loading asychronously in the background.
     ///   - An error value if the VirtualGpu is in an illegal state that
     ///         does not allow the frame to be created.
-    pub fn begin(vgpu: &'a VirtualGpu) -> anyhow::Result<Option<Self>> {
+    pub fn begin(vgpu: &VirtualGpu) -> anyhow::Result<Option<Self>> {
         vgpu.window().request_redraw();
         if !vgpu.config().width < 1 { return Ok(None); }
 
@@ -66,7 +64,7 @@ impl <'a> RenderFrame<'a> {
                 label: Some("Render Encoder"),
             });
         
-        Ok(Some(Self { output, view, encoder, vgpu }))
+        Ok(Some(Self { output, view, encoder }))
     }
 
     pub fn init_pass<'b>(
@@ -98,8 +96,8 @@ impl <'a> RenderFrame<'a> {
 
     /// Submit this frame for rendering/use by the GPU.  This will consume
     /// this frame, effectively ending it.
-    pub fn submit(self) {
-        self.vgpu.queue().submit(std::iter::once(self.encoder.finish()));
+    pub fn submit(self, vgpu: &VirtualGpu) {
+        vgpu.queue().submit(std::iter::once(self.encoder.finish()));
         self.output.present();
     }
 }

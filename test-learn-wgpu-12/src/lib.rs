@@ -306,7 +306,7 @@ impl State {
             }
         }
 
-        frame.submit();
+        frame.submit(&self.vgpu);
 
         Ok(())
     }
