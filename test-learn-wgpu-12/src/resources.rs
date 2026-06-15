@@ -196,7 +196,6 @@ pub async fn load_model(
                 name: file_name.to_string(),
                 vertex_buffer,
                 index_buffer,
-                num_elements: m.mesh.indices.len() as u32,
                 material: m.mesh.material_id.unwrap_or(0),
             }
         })

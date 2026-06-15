@@ -94,7 +94,6 @@ pub struct Mesh {
     pub name: String,
     pub vertex_buffer: ImmutableBuffer<[ModelVertex]>,
     pub index_buffer: ImmutableBuffer<[u32]>,
-    pub num_elements: u32,
     pub material: usize,
 }
 
