@@ -8,10 +8,14 @@ use crate::{BindGroupProvider, BindableObject, Buffer, Pipeline};
 /// Represents a render pass that may be used to render
 /// one pass of a frame before being dropped.  These are
 /// created solely through the `RenderFrame` struct.
+/// 
+/// RenderPass is swapped to a forget lifetime as this is
+/// already lifetime protected.  This improves support for
+/// weird things like EGUI's Renderer.
 #[derive(Getters, MutGetters)]
 pub struct SinglePass<'a> {
     #[getset(get = "pub", get_mut = "pub")]
-    pass: wgpu::RenderPass<'a>,
+    pass: wgpu::RenderPass<'static>,
     #[getset(get = "pub", set = "pub")]
     vertex_slot: u32,
     #[getset(get = "pub", set = "pub")]
@@ -24,7 +28,7 @@ impl <'a> SinglePass<'a> {
     /// Create from a wgpu `RenderPass`.
     pub(crate) fn new(pass: wgpu::RenderPass<'a>) -> Self {
         Self {
-            pass,
+            pass: pass.forget_lifetime(),
             vertex_slot: 0,
             indices_slot: 1,
             current_pipeline: None,
