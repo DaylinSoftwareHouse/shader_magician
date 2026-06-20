@@ -22,11 +22,13 @@ pub fn resolve(fn_name: &String, entry_fn: &syn::ItemFn, index: &ProjectIndex) -
     while let Some(name) = queue.pop_front() {
         let item = match collected.get(&name).or_else(|| index.items.get(&name)) {
             Some(i) => i.clone(),
-            None    => continue, // not in project (stdlib, external crate — skip)
+            None    =>  continue, // not in project (stdlib, external crate — skip)
         };
 
         // Collect deps referenced by this item
         let deps = deps_of_item(find_segs(&name), &item, index);
+
+        // panic!("Deps {deps:?}");
 
         // Pull in impl blocks for any type we're including
         pull_impls(&name, index, &mut collected, &mut visited, &mut queue);

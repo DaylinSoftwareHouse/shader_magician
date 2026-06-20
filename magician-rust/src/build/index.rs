@@ -64,7 +64,7 @@ fn index_items(idx: &mut ProjectIndex, items: Vec<Item>, file_path: &PathBuf, ro
                             idx.uses.insert(use_name.ident.to_string(), segs.join("::"));
                         },
                         syn::UseTree::Rename(_use_rename) => todo!("Use rename support"),
-                        syn::UseTree::Glob(_use_glob) => todo!("Use glob support"),
+                        syn::UseTree::Glob(_use_glob) => {}, // todo!("Use glob support"),
                     }
                 }
 

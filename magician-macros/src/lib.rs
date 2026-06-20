@@ -61,11 +61,17 @@ pub fn shader(attr: TokenStream, item: TokenStream) -> TokenStream {
         match input {
             syn::FnArg::Receiver(_receiver) => {},
             syn::FnArg::Typed(pat_type) => {
-                pat_type.attrs.retain(|a| match &a.meta {
-                    syn::Meta::Path(_path) => true,
-                    syn::Meta::List(_meta_list) => true,
-                    syn::Meta::NameValue(meta_name_value) => meta_name_value.path.segments
-                        .last().map(|a| a.ident != "group").unwrap_or(true),
+                pat_type.attrs.retain(|a| {
+                    let result = match &a.meta {
+                        syn::Meta::Path(_path) => true,
+                        syn::Meta::List(_meta_list) => true,
+                        syn::Meta::NameValue(meta_name_value) => meta_name_value.path.segments
+                            .last().map(|a| {a.ident != "group"}).unwrap_or(true),
+                    };
+
+                    if result { panic!("Keeping {a:?}") }
+
+                    result
                 });
             }
         }

@@ -1,9 +1,9 @@
 use std::marker::PhantomData;
 
 use getset::{Getters, MutGetters};
-use magician_rust::{Sampler, Texture2D};
+use magician_rust::{Sampler, Texture2D, Vec4};
 
-use crate::{VirtualGpu};
+use crate::{Buffer, MutableBuffer, VirtualGpu};
 
 #[derive(Getters, MutGetters)]
 pub struct BindableObject<G: BindGroupProvider> {
@@ -29,14 +29,13 @@ impl <G: BindGroupProvider> BindableObject<G> {
     }
 }
 
-
 pub trait BindGroupPart {
     type PartInput;
 
     /// Create an entry for a `wgpu::BindGroupLayout` for this part of the
     /// bind group.
     fn layout_entry(
-        vgpu: &VirtualGpu,
+        _vgpu: &VirtualGpu,
         binding: u32, 
         visibility: wgpu::ShaderStages
     ) -> wgpu::BindGroupLayoutEntry;
@@ -71,8 +70,40 @@ pub trait BindGroupProvider {
     ) -> wgpu::BindGroup;
 }
 
+impl BindGroupPart for Vec4 {
+    type PartInput = MutableBuffer<Vec4>;
 
+    fn layout_entry(
+        _vgpu: &VirtualGpu,
+        binding: u32, 
+        visibility: wgpu::ShaderStages
+    ) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding, visibility,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None, // or Some(NonZeroU64::new(16).unwrap()) for vec4 (4 * 4 bytes)
+            },
+            count: None,
+        }
+    }
 
+    fn group_entry<'a>(
+        _vgpu: &'a VirtualGpu,
+        binding: u32,
+        input: &'a Self::PartInput
+    ) -> wgpu::BindGroupEntry<'a> {
+        wgpu::BindGroupEntry {
+            binding,
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: input.buffer(), // a wgpu::Buffer created with BufferUsages::UNIFORM
+                offset: 0,
+                size: None, // or Some(NonZeroU64::new(16).unwrap()) to be explicit
+            }),
+        }
+    }
+}
 
 impl BindGroupPart for Texture2D {
     type PartInput = wgpu::TextureView;
