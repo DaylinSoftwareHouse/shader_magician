@@ -21,6 +21,7 @@ tobj = { version = "3.2", default-features = false, features = ["async"]}
 wgpu = { version = "29.0" }
 winit = { version = "0.30", features = ["android-native-activity"] }
 instant = "0.1"
+derive_more = "2.1.1"
 
 [dependencies.image]
 version = "0.24"

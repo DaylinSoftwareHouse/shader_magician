@@ -111,12 +111,8 @@ impl State {
             ::from_inputs(&vgpu, light_buffer.buffer());
 
         // load depth texture
-        let depth_texture = texture::Texture::create_depth_texture(
-            vgpu.device(), 
-            vgpu.config(), 
-            "depth_texture"
-        );
-        let depth_texture = magician_vgpu::StaticTexture::new(depth_texture.texture, depth_texture.view, depth_texture.sampler);
+        let depth_texture = texture::Texture::create_depth_texture(&vgpu);
+        let depth_texture = depth_texture.0;
 
         let render_pipeline = Pipeline::builder("Normal Shader")
             .shader(ShaderSource::Independent { 
@@ -151,18 +147,14 @@ impl State {
             let normal_bytes = include_bytes!("../res/cobble-normal.png");
 
             let diffuse_texture = texture::Texture::from_bytes(
-                vgpu.device(),
-                vgpu.queue(),
+                &vgpu,
                 diffuse_bytes,
-                "res/alt-diffuse.png",
                 false,
             )
             .unwrap();
             let normal_texture = texture::Texture::from_bytes(
-                vgpu.device(),
-                vgpu.queue(),
+                &vgpu,
                 normal_bytes,
-                "res/alt-normal.png",
                 true,
             )
             .unwrap();
@@ -208,12 +200,7 @@ impl State {
             self.vgpu.config_mut().height = height;
             self.vgpu.surface().configure(self.vgpu.device(), self.vgpu.config());
             
-            let depth_texture = texture::Texture::create_depth_texture(
-                self.vgpu.device(), 
-                self.vgpu.config(), 
-                "depth_texture"
-            );
-            self.depth_texture = magician_vgpu::StaticTexture::new(depth_texture.texture, depth_texture.view, depth_texture.sampler);
+            self.depth_texture = texture::Texture::create_depth_texture(&self.vgpu).0;
         }
     }
 

@@ -54,13 +54,12 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
 }
 
 pub async fn load_texture(
+    vgpu: &VirtualGpu,
     file_name: &str,
     is_normal_map: bool,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
 ) -> anyhow::Result<texture::Texture> {
     let data = load_binary(file_name).await?;
-    texture::Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
+    texture::Texture::from_bytes(vgpu, &data, is_normal_map)
 }
 
 pub async fn load_model(
@@ -87,8 +86,8 @@ pub async fn load_model(
 
     let mut materials = Vec::new();
     for m in obj_materials? {
-        let diffuse_texture = load_texture(&m.diffuse_texture, false, vgpu.device(), vgpu.queue()).await?;
-        let normal_texture = load_texture(&m.normal_texture, true, vgpu.device(), vgpu.queue()).await?;
+        let diffuse_texture = load_texture(&vgpu, &m.diffuse_texture, false).await?;
+        let normal_texture = load_texture(&vgpu, &m.normal_texture, true).await?;
 
         materials.push(model::Material::new(
             vgpu,
