@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use magician_vgpu::glam::{Quat, Vec3, Vec4};
-use magician_vgpu::{BindGroupProvider, BindableObject, Buffer, DrawSettings, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, Pipeline, RenderFrame, ShaderSource, StoreOp, VirtualGpu, WritableBuffer};
+use magician_vgpu::{BindGroupProvider, BindableObject, Buffer, DrawSettings, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, Pipeline, RenderFrame, ShaderSource, ShaderType, StoreOp, VirtualGpu, WritableBuffer};
 use model::Vertex;
 use shaders::common::{Camera, CameraInput, Light, LightInput, Material};
 use winit::application::ApplicationHandler;
@@ -114,34 +114,53 @@ impl State {
         let depth_texture = texture::Texture::create_depth_texture(&vgpu);
         let depth_texture = depth_texture.0;
 
+        // create normal shader
         let render_pipeline = Pipeline::builder("Normal Shader")
-            .shader(ShaderSource::Independent { 
-                vertex: include_str!("../shaders/shader_out/primary_vs_main.wgsl").into(), 
-                vertex_main_function: "primary_vs_main".into(), 
-                fragment: include_str!("../shaders/shader_out/primary_fs_main.wgsl").into(), 
-                fragment_main_function: "primary_fs_main".into()
-            })
+            .source(
+                ShaderType::Vertex, 
+                ShaderSource {
+                    source: include_str!("../shaders/shader_out/primary_vs_main.wgsl").into(),
+                    main_function: "primary_vs_main".into()
+                }
+            )
+            .source(
+                ShaderType::Fragment, 
+                ShaderSource {
+                    source: include_str!("../shaders/shader_out/primary_fs_main.wgsl").into(),
+                    main_function: "primary_fs_main".into()
+                }
+            )
             .depth_format(texture::Texture::DEPTH_FORMAT)
             .vertex(model::ModelVertex::desc())
             .vertex(InstanceRaw::desc())
-            .layout_raw::<Material>(&material_bgl)
+            .layout_raw::<Material>(material_bgl)
             .layout(&camera_object)
             .layout(&light_object)
             .build(&vgpu);
 
+        // create light shader
         let light_render_pipeline = Pipeline::builder("Light Shader")
-            .shader(ShaderSource::Independent { 
-                vertex: include_str!("../shaders/shader_out/light_vs_main.wgsl").into(), 
-                vertex_main_function: "light_vs_main".into(), 
-                fragment: include_str!("../shaders/shader_out/light_fs_main.wgsl").into(), 
-                fragment_main_function: "light_fs_main".into()
-            })
+            .source(
+                ShaderType::Vertex, 
+                ShaderSource {
+                    source: include_str!("../shaders/shader_out/light_vs_main.wgsl").into(),
+                    main_function: "light_vs_main".into()
+                }
+            )
+            .source(
+                ShaderType::Fragment, 
+                ShaderSource {
+                    source: include_str!("../shaders/shader_out/light_fs_main.wgsl").into(),
+                    main_function: "light_fs_main".into()
+                }
+            )
             .depth_format(texture::Texture::DEPTH_FORMAT)
             .vertex(model::ModelVertex::desc())
             .layout(&camera_object)
             .layout(&light_object)
             .build(&vgpu);
 
+        // create basic material for cubes
         let debug_material = {
             let diffuse_bytes = include_bytes!("../res/cobble-diffuse.png");
             let normal_bytes = include_bytes!("../res/cobble-normal.png");

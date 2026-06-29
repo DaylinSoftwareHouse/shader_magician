@@ -29,21 +29,17 @@ impl Pipeline {
     }
 }
 
-#[derive(Default, Debug, Clone)]
-pub enum ShaderSource {
-    #[default]
-    Empty,
-    Combined {
-        source: String,
-        vertex_main_function: String,
-        fragment_main_function: String
-    },
-    Independent {
-        vertex: String,
-        vertex_main_function: String,
-        fragment: String,
-        fragment_main_function: String
-    }
+
+#[derive(Debug, Clone)]
+pub struct ShaderSource {
+    pub source: String,
+    pub main_function: String
+}
+
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ShaderType {
+    Fragment,
+    Vertex
 }
 
 /// A simple builder for creating `Pipeline`s in a simple and easy
@@ -52,16 +48,17 @@ pub enum ShaderSource {
 #[derive(Default)]
 pub struct PipelineBuilder<'a> {
     label: String,
-    shader_src: ShaderSource,
+    shader_srcs: AHashMap<ShaderType, ShaderSource>,
     vertex_layouts: Vec<wgpu::VertexBufferLayout<'a>>,
     depth_format: Option<wgpu::TextureFormat>,
-    slot_map: AHashMap<TypeId, (u32, &'a wgpu::BindGroupLayout)>
+    slot_map: AHashMap<TypeId, (u32, wgpu::BindGroupLayout)>
 }
 
 impl <'a> PipelineBuilder<'a> {
-    /// Sets the shader source WGSL text in the builder.
-    pub fn shader(mut self, shader_src: ShaderSource) -> Self {
-        self.shader_src = shader_src;
+    /// Add a shader source of the given type to this builder.  If a source
+    /// of the same type has already been added, it will be overriden.
+    pub fn source(mut self, ty: ShaderType, source: ShaderSource) -> Self {
+        self.shader_srcs.insert(ty, source);
         return self;
     }
 
@@ -75,12 +72,12 @@ impl <'a> PipelineBuilder<'a> {
     pub fn layout<T: BindGroupProvider + 'static>(mut self, object: &'a BindableObject<T>) -> Self {
         let type_id = TypeId::of::<T>();
         let id = self.slot_map.len();
-        self.slot_map.insert(type_id, (id as u32, object.layout()));
+        self.slot_map.insert(type_id, (id as u32, object.layout().clone()));
         return self;
     }
 
     /// Add a bind group layout from a bindable object to this builder.
-    pub fn layout_raw<T: 'static>(mut self, layout: &'a wgpu::BindGroupLayout) -> Self {
+    pub fn layout_raw<T: 'static>(mut self, layout: wgpu::BindGroupLayout) -> Self {
         let id = self.slot_map.len();
         self.slot_map.insert(TypeId::of::<T>(), (id as u32, layout));
         return self;
@@ -89,6 +86,20 @@ impl <'a> PipelineBuilder<'a> {
     /// Add a depth format to this builder.
     pub fn depth_format(mut self, format: wgpu::TextureFormat) -> Self {
         self.depth_format = Some(format);
+        return self;
+    }
+
+    /// Merges PipelineBuilder `other` into this builder.  If some data is present
+    /// in both (for example, from the internal shader sources map), the data from 
+    /// `other` will be taken over those in `self`.
+    pub fn merge(mut self, other: PipelineBuilder<'a>) -> Self {
+        other.shader_srcs.into_iter()
+            .for_each(|(k, v)| { self.shader_srcs.insert(k, v); });
+        self.vertex_layouts.extend(other.vertex_layouts);
+        if let Some(depth_format) = other.depth_format { self.depth_format = Some(depth_format) }
+        other.slot_map.into_iter()
+            .for_each(|(k, v)| { self.slot_map.insert(k, v); });
+
         return self;
     }
 
@@ -101,10 +112,10 @@ impl <'a> PipelineBuilder<'a> {
         bgls_sorted.sort_by_key(|a| a.1.0);
         let bgls = bgls_sorted
             .iter()
-            .map(|a| Some(a.1.1))
+            .map(|a| Some(&a.1.1))
             .collect::<Vec<_>>();
         let slot_map = bgls_sorted
-            .into_iter()
+            .iter()
             .map(|a| (a.0, a.1.0))
             .collect::<AHashMap<TypeId, u32>>();
 
@@ -118,30 +129,24 @@ impl <'a> PipelineBuilder<'a> {
         );
 
         // create shader module
-        let (vs_main, vs_shader) = match &self.shader_src {
-            ShaderSource::Empty => panic!("No shader source given"),
-            ShaderSource::Combined { source, vertex_main_function, fragment_main_function: _ } =>
-                (vertex_main_function, source),
-            ShaderSource::Independent { vertex, vertex_main_function, fragment: _, fragment_main_function: _ } =>
-                (vertex_main_function, vertex)
-        };
+        let vs_source = self.shader_srcs
+            .get(&ShaderType::Vertex)
+            .cloned()
+            .expect("Failed to find vertex shader source");
         let vertex_shader = vgpu.device().create_shader_module(
             wgpu::ShaderModuleDescriptor {
                 label: Some(&self.label),
-                source: wgpu::ShaderSource::Wgsl(vs_shader.into())
+                source: wgpu::ShaderSource::Wgsl(vs_source.source.into())
             }
         );
-        let (fs_main, fs_shader) = match &self.shader_src {
-            ShaderSource::Empty => panic!("No shader source given"),
-            ShaderSource::Combined { source, vertex_main_function: _, fragment_main_function } =>
-                (fragment_main_function, source),
-            ShaderSource::Independent { vertex: _, vertex_main_function: _, fragment, fragment_main_function } =>
-                (fragment_main_function, fragment)
-        };
+        let fs_source = self.shader_srcs
+            .get(&ShaderType::Fragment)
+            .cloned()
+            .expect("Failed to find fragment shader source");
         let fragment_shader = vgpu.device().create_shader_module(
             wgpu::ShaderModuleDescriptor {
                 label: Some(&self.label),
-                source: wgpu::ShaderSource::Wgsl(fs_shader.into())
+                source: wgpu::ShaderSource::Wgsl(fs_source.source.into())
             }
         );
 
@@ -150,13 +155,13 @@ impl <'a> PipelineBuilder<'a> {
             layout: Some(&layout),
             vertex: wgpu::VertexState {
                 module: &vertex_shader,
-                entry_point: Some(vs_main.as_str()),
+                entry_point: Some(vs_source.main_function.as_str()),
                 buffers: &self.vertex_layouts,
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &fragment_shader,
-                entry_point: Some(fs_main.as_str()),
+                entry_point: Some(fs_source.main_function.as_str()),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: vgpu.config().format,
                     blend: Some(wgpu::BlendState {
