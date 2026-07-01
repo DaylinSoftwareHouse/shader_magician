@@ -5,5 +5,5 @@ pub struct Sampler;
 
 #[allow(unused, nonstandard_style)]
 pub fn textureSample(texture: Texture2D, sampler: Sampler, uv: Vec2) -> Vec4 {
-    todo!()
+    todo!("Texture sampling is not implemented yet")
 }

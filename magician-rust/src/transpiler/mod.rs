@@ -78,9 +78,9 @@ impl Transpiler {
                     }
                 },
                 
-                syn::Item::Const(_item_const) => todo!(),
-                syn::Item::Enum(_item_enum) => todo!(),
-                syn::Item::ExternCrate(_item_extern_crate) => todo!(),
+                syn::Item::Const(_item_const) => todo!("Const items are not yet supported"),
+                syn::Item::Enum(_item_enum) => todo!("Enum items are not yet supported"),
+                syn::Item::ExternCrate(_item_extern_crate) => todo!("Extern crate items are not yet supported"),
                 syn::Item::Fn(item_fn) => { 
                     let function = convert_function(&mut self, &item_fn);
                     self.functions.insert(function.0, function.1);
@@ -96,7 +96,7 @@ impl Transpiler {
                 syn::Item::Union(_item_union) => todo!("Union"),
                 syn::Item::Use(_item_use) => panic!("Imports should have been stripped before this stage!"),
                 syn::Item::Verbatim(_token_stream) => panic!("Cannot handle verbatim syntax items here!"),
-                _ => todo!(),
+                _ => todo!("Unsupported syntax item"),
             }
         }
 
