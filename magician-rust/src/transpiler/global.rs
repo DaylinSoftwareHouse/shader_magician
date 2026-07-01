@@ -192,7 +192,19 @@ pub fn convert_ty(ty: &syn::Type) -> String {
             translate_ty_name(&ident).to_string()
         },
 
-        syn::Type::Array(_type_array) => todo!("Array types are not yet supported"),
+        syn::Type::Array(type_array) => {
+            // panic!("Type array expr {:?}", type_array.len);
+            let size = match &type_array.len {
+                syn::Expr::Lit(lit) => match &lit.lit {
+                    syn::Lit::Int(lit) => lit.base10_digits().to_string(),
+                    _ => panic!("Non-numeric array size found, found {:?}", lit.lit)
+                },
+                _ => panic!("Non-literal array size found, found {:?}", type_array.len)
+            };
+
+            format!("array<{}, {}>", convert_ty(&*type_array.elem), size)
+        },
+
         syn::Type::BareFn(_type_bare_fn) => todo!("Bare function types are not yet supported"),
         syn::Type::Group(_type_group) => todo!("Grouped types are not yet supported"),
         syn::Type::ImplTrait(_type_impl_trait) => todo!("impl Trait types are not yet supported"),
