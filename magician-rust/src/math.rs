@@ -425,6 +425,8 @@ macro_rules! impl_mat_ops {
         impl Mul<$Vec> for $Mat { type Output = $Vec; #[inline] fn mul(self, v: $Vec) -> $Vec { <$Vec>::from(self.0 * v.0) } }
         impl Mul<$scalar> for $Mat { type Output = Self; #[inline] fn mul(self, s: $scalar) -> Self { Self(self.0 * s) } }
         impl Neg for $Mat { type Output = Self; #[inline] fn neg(self) -> Self { Self(-self.0) } }
+        impl Mul<$Mat> for $scalar { type Output = $Mat; #[inline] fn mul(self, m: $Mat) -> $Mat { <$Mat>::from(self * m.0) } }
+        // impl Neg for $Mat { type Output = Self; #[inline] fn neg(self) -> Self { Self(-self.0) } }
     };
 }
 

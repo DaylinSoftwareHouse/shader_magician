@@ -175,6 +175,7 @@ pub fn convert_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn:
 
         syn::Expr::Tuple(expr_tuple) => todo!("Tuple support: {expr_tuple:?}"),
         syn::Expr::Infer(expr_infer) => todo!("Infered types: {expr_infer:?}"),
+        syn::Expr::Cast(cast) => convert_expr(transpiler, func, &cast.expr),
 
         _ => panic!("Unsupported expression: {:?}", item)
     }
