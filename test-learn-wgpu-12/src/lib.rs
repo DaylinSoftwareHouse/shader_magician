@@ -133,9 +133,9 @@ impl State {
             .depth_format(texture::Texture::DEPTH_FORMAT)
             .vertex(model::ModelVertex::desc())
             .vertex(InstanceRaw::desc())
-            .layout_raw::<Material>(material_bgl)
-            .layout(&camera_object)
-            .layout(&light_object)
+            .layout_raw::<Material>(0, material_bgl)
+            .layout(1, &camera_object)
+            .layout(2, &light_object)
             .build(&vgpu);
 
         // create light shader
@@ -156,8 +156,8 @@ impl State {
             )
             .depth_format(texture::Texture::DEPTH_FORMAT)
             .vertex(model::ModelVertex::desc())
-            .layout(&camera_object)
-            .layout(&light_object)
+            .layout(0, &camera_object)
+            .layout(1, &light_object)
             .build(&vgpu);
 
         // create basic material for cubes

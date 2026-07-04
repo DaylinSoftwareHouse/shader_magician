@@ -69,17 +69,15 @@ impl <'a> PipelineBuilder<'a> {
     }
 
     /// Add a bind group layout from a bindable object to this builder.
-    pub fn layout<T: BindGroupProvider + 'static>(mut self, object: &'a BindableObject<T>) -> Self {
+    pub fn layout<T: BindGroupProvider + 'static>(mut self, idx: usize, object: &'a BindableObject<T>) -> Self {
         let type_id = TypeId::of::<T>();
-        let id = self.slot_map.len();
-        self.slot_map.insert(type_id, (id as u32, object.layout().clone()));
+        self.slot_map.insert(type_id, (idx as u32, object.layout().clone()));
         return self;
     }
 
     /// Add a bind group layout from a bindable object to this builder.
-    pub fn layout_raw<T: 'static>(mut self, layout: wgpu::BindGroupLayout) -> Self {
-        let id = self.slot_map.len();
-        self.slot_map.insert(TypeId::of::<T>(), (id as u32, layout));
+    pub fn layout_raw<T: 'static>(mut self, idx: usize, layout: wgpu::BindGroupLayout) -> Self {
+        self.slot_map.insert(TypeId::of::<T>(), (idx as u32, layout));
         return self;
     }
 
