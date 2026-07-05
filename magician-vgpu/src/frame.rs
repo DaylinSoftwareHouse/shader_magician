@@ -67,11 +67,11 @@ impl RenderFrame {
         Ok(Some(Self { output, view, encoder }))
     }
 
-    pub fn init_pass<'b>(
-        &'b mut self,
+    pub fn init_pass(
+        &mut self,
         color_attachments: &[PassAttachment<Vec4>],
         depth_attachment: Option<PassAttachment<f32>>
-    ) -> SinglePass<'b> {
+    ) -> SinglePass {
         let frame_output = self.view().clone();
         let color_attachments = 
             color_attachments.into_iter()

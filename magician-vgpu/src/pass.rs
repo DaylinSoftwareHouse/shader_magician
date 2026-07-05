@@ -2,6 +2,7 @@ use std::{any::TypeId, ops::Range};
 
 use bytemuck::NoUninit;
 use getset::{Getters, MutGetters};
+use mutual::RefCowData;
 
 use crate::{BindGroupProvider, BindableObject, Buffer, Pipeline};
 
@@ -13,20 +14,20 @@ use crate::{BindGroupProvider, BindableObject, Buffer, Pipeline};
 /// already lifetime protected.  This improves support for
 /// weird things like EGUI's Renderer.
 #[derive(Getters, MutGetters)]
-pub struct SinglePass<'a> {
+pub struct SinglePass {
     #[getset(get = "pub", get_mut = "pub")]
     pass: wgpu::RenderPass<'static>,
     #[getset(get = "pub", set = "pub")]
     vertex_slot: u32,
     #[getset(get = "pub", set = "pub")]
     indices_slot: u32,
-    current_pipeline: Option<&'a Pipeline>,
+    current_pipeline: Option<RefCowData<Pipeline>>,
     last_instances_size: u32
 }
 
-impl <'a> SinglePass<'a> {
+impl SinglePass {
     /// Create from a wgpu `RenderPass`.
-    pub(crate) fn new(pass: wgpu::RenderPass<'a>) -> Self {
+    pub(crate) fn new<'a>(pass: wgpu::RenderPass<'a>) -> Self {
         Self {
             pass: pass.forget_lifetime(),
             vertex_slot: 0,
@@ -41,7 +42,7 @@ impl <'a> SinglePass<'a> {
     /// to prevent drawing instances that do not exist.
     pub fn use_pipeline(
         &mut self,
-        pipeline: &'a Pipeline
+        pipeline: RefCowData<Pipeline>
     ) {
         self.pass_mut().set_pipeline(&pipeline.pipeline());
         self.current_pipeline = Some(pipeline);
@@ -62,7 +63,7 @@ impl <'a> SinglePass<'a> {
         let type_id = TypeId::of::<T>();
         let Some(index) = pipeline.slot_map().get(&type_id)
             else { return false };
-        self.pass_mut().set_bind_group(*index, bindable.bind_group(), &[]);
+        self.pass.set_bind_group(*index, bindable.bind_group(), &[]);
         return true;
     }
 

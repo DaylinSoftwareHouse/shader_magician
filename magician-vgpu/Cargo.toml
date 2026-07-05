@@ -13,3 +13,4 @@ winit = { version = "0.30", features = ["android-native-activity"] }
 anyhow = "1.0.102"
 bytemuck = "1.25.0"
 ahash = "0.8.12"
+mutual = "1.0.2"

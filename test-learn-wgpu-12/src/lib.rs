@@ -3,6 +3,7 @@ use std::sync::Arc;
 use magician_vgpu::glam::{Quat, Vec3, Vec4};
 use magician_vgpu::{BindGroupProvider, BindableObject, Buffer, DrawSettings, ImmutableBuffer, LoadOp, MutableBuffer, PassAttachment, PassTarget, Pipeline, RenderFrame, ShaderSource, ShaderType, StoreOp, VirtualGpu, WritableBuffer};
 use model::Vertex;
+use mutual::CowData;
 use shaders::common::{Camera, CameraInput, Light, LightInput, Material};
 use winit::application::ApplicationHandler;
 use winit::event_loop::ActiveEventLoop;
@@ -25,7 +26,7 @@ mod texture;
 pub struct State {
     vgpu: VirtualGpu,
 
-    render_pipeline: Pipeline,
+    render_pipeline: CowData<Pipeline>,
     obj_model: model::Model,
     camera: camera::Camera,                      
     projection: camera::Projection,              
@@ -39,7 +40,7 @@ pub struct State {
     light_uniform: Light,
     light_buffer: MutableBuffer<Light>,
     light_object: BindableObject<LightInput>,
-    light_render_pipeline: Pipeline,
+    light_render_pipeline: CowData<Pipeline>,
     #[allow(dead_code)]
     debug_material: model::Material,
     mouse_pressed: bool,
@@ -188,7 +189,7 @@ impl State {
 
         Ok(Self {
             vgpu,
-            render_pipeline,
+            render_pipeline: CowData::new(render_pipeline),
             obj_model,
             camera,
             projection,
@@ -202,7 +203,7 @@ impl State {
             light_uniform,
             light_buffer,
             light_object,
-            light_render_pipeline,
+            light_render_pipeline: CowData::new(light_render_pipeline),
             #[allow(dead_code)]
             debug_material,
             
@@ -284,7 +285,7 @@ impl State {
                 })
             );
 
-            pass.use_pipeline(&self.light_render_pipeline);
+            pass.use_pipeline(self.light_render_pipeline.get_ref());
             pass.bind(&self.camera_object);
             pass.bind(&self.light_object);
             for mesh in &self.obj_model.meshes {
@@ -297,7 +298,7 @@ impl State {
                 );
             }
 
-            pass.use_pipeline(&self.render_pipeline);
+            pass.use_pipeline(self.render_pipeline.get_ref());
             pass.bind_instances(&self.instance_buffer);
             pass.bind(&self.camera_object);
             pass.bind(&self.light_object);   
