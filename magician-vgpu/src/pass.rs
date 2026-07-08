@@ -68,7 +68,7 @@ impl SinglePass {
     }
 
     /// Bind a `wgpu::BindGroup` to a specific index.
-    pub fn bind_raw<T: BindGroupProvider>(
+    pub fn bind_raw(
         &mut self,
         index: u32,
         bindable: &wgpu::BindGroup
