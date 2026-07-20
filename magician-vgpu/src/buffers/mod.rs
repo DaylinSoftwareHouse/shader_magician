@@ -1,13 +1,18 @@
+use bytemuck::NoUninit;
+
 use crate::VirtualGpu;
 
+pub mod chunked;
 pub mod dynamic;
 pub mod immutable;
 pub mod mutable;
+pub mod tree;
 
-use bytemuck::NoUninit;
+pub use chunked::*;
 pub use dynamic::*;
 pub use immutable::*;
 pub use mutable::*;
+pub use tree::*;
 
 /// A trait representing a buffer that could be used by the `VirtualGPU`.
 pub trait Buffer {
