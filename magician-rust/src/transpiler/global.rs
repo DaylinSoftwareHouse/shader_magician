@@ -185,10 +185,22 @@ fn convert_param(item: &syn::Field) -> Param {
 pub fn convert_ty(ty: &syn::Type) -> String {
     match &ty {
         syn::Type::Path(type_path) => {
-            let ident = type_path.path.segments.last()
-                .expect("Unnamed param path")
-                .ident
-                .to_string();
+            let segment = type_path.path.segments.last().expect("Unnamed param path");
+            let ident = segment.ident.to_string();
+
+            if ident == "BindlessArray" {
+                let inner_ty = match &segment.arguments {
+                    syn::PathArguments::AngleBracketed(args) => args.args.iter()
+                        .find_map(|a| match a {
+                            syn::GenericArgument::Type(t) => Some(t),
+                            _ => None
+                        })
+                        .expect("BindlessArray<T> requires a type argument"),
+                    _ => panic!("BindlessArray<T> requires a type argument")
+                };
+                return format!("binding_array<{}>", convert_ty(inner_ty));
+            }
+
             translate_ty_name(&ident).to_string()
         },
 

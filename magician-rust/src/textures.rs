@@ -1,6 +1,9 @@
 use crate::*;
 
+#[derive(Clone, Copy, Debug)]
 pub struct Texture2D;
+
+#[derive(Clone, Copy, Debug)]
 pub struct Sampler;
 
 #[allow(unused, nonstandard_style)]

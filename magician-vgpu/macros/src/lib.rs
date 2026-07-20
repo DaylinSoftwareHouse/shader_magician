@@ -12,23 +12,23 @@ pub fn bindable_object(input: TokenStream) -> TokenStream {
         .collect::<Vec<_>>();
     let field_idx = (0 .. fields.len() as u32).map(|a| LitInt::new(&a.to_string(), Span::call_site())).collect::<Vec<_>>();
 
-    let inputs = quote! { (#(<#fields as magician_vgpu::bindable::BindGroupPart>::PartInput),*) };
+    let inputs = quote! { (#(<#fields as magician_vgpu::bindable::BindGroupPart>::PartInput<'a>),*) };
 
     let entries = quote! {
         [
             #(
-                #fields::layout_entry(vgpu, #field_idx, visibility)
+                <#fields as magician_vgpu::bindable::BindGroupPart>::layout_entry(vgpu, #field_idx, visibility)
             ),*
         ]
     };
 
-    let groups = 
+    let groups =
         if fields.len() == 0 { quote! { [] } }
         else if fields.len() == 1 {
             quote! {
                 [
                     #(
-                        #fields::group_entry(vgpu, #field_idx, input)
+                        <#fields as magician_vgpu::bindable::BindGroupPart>::group_entry(vgpu, #field_idx, input)
                     ),*
                 ]
             }
@@ -36,7 +36,7 @@ pub fn bindable_object(input: TokenStream) -> TokenStream {
             quote! {
                 [
                     #(
-                        #fields::group_entry(vgpu, #field_idx, &input.#field_idx)
+                        <#fields as magician_vgpu::bindable::BindGroupPart>::group_entry(vgpu, #field_idx, &input.#field_idx)
                     ),*
                 ]
             }
@@ -44,7 +44,7 @@ pub fn bindable_object(input: TokenStream) -> TokenStream {
 
     TokenStream::from(quote! {
         impl magician_vgpu::BindGroupProvider for #name {
-            type Input = #inputs;
+            type Input<'a> = #inputs;
 
             fn layout(
                 vgpu: &magician_vgpu::VirtualGpu,
@@ -59,10 +59,10 @@ pub fn bindable_object(input: TokenStream) -> TokenStream {
                 )
             }
 
-            fn group(
+            fn group<'a>(
                 vgpu: &magician_vgpu::VirtualGpu,
                 layout: &wgpu::BindGroupLayout,
-                input: &#inputs
+                input: &'a #inputs
             ) -> wgpu::BindGroup {
                 use magician_vgpu::BindGroupPart;
                 vgpu.device().create_bind_group(
@@ -84,7 +84,7 @@ pub fn buffer_object(input: TokenStream) -> TokenStream {
     
     TokenStream::from(quote! {
         impl magician_vgpu::bindable::BindGroupPart for #name {
-            type PartInput = wgpu::Buffer;
+            type PartInput<'a> = wgpu::Buffer;
             
             fn layout_entry(
                 vgpu: &magician_vgpu::VirtualGpu,
@@ -105,7 +105,7 @@ pub fn buffer_object(input: TokenStream) -> TokenStream {
             fn group_entry<'a>(
                 vgpu: &'a magician_vgpu::VirtualGpu,
                 binding: u32,
-                input: &'a Self::PartInput
+                input: &'a Self::PartInput<'a>
             ) -> wgpu::BindGroupEntry<'a> {
                 use magician_vgpu::Buffer;
                 wgpu::BindGroupEntry {
