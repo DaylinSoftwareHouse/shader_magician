@@ -97,6 +97,7 @@ impl <'a> PipelineBuilder<'a> {
         if let Some(depth_format) = other.depth_format { self.depth_format = Some(depth_format) }
         other.slot_map.into_iter()
             .for_each(|(k, v)| { self.slot_map.insert(k, v); });
+        self.label = format!("{} + {}", self.label, other.label);
 
         return self;
     }
