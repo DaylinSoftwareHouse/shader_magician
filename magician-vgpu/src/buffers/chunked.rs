@@ -224,8 +224,8 @@ pub struct ChunkHandleInner {
 
 /// Hash a slice of chunked-buffer elements for deduplication lookups.
 fn hash128<T: ChunkedBufferContent>(data: &[T]) -> u128 {
-    let mut h1 = RandomState::with_seed(0x243F6A8885A308D3).build_hasher();
-    let mut h2 = RandomState::with_seed(0xA4093822299F31D0).build_hasher();
+    let mut h1 = RandomState::with_seed(0x243FA308).build_hasher();
+    let mut h2 = RandomState::with_seed(0xA4099FD0).build_hasher();
     data.hash(&mut h1);
     data.hash(&mut h2);
     ((h1.finish() as u128) << 64) | (h2.finish() as u128)
