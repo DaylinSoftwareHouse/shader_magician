@@ -2,6 +2,8 @@ pub mod desc;
 
 pub use desc::*;
 
+use magician_rust::glam::UVec2;
+
 use crate::VirtualGpu;
 
 /// Trait representing anything that could be represented
@@ -126,6 +128,33 @@ impl StaticTexture {
         );
 
         return texture;
+    }
+
+    /// Writes `bytes` into a `size`-sized sub-region of this (already-created) texture at
+    /// `offset`, leaving the rest of the texture untouched. Used to place sub-images into a
+    /// larger texture (e.g. a growable atlas page) without re-uploading the whole thing.
+    pub fn write_region(
+        &self,
+        vgpu: &VirtualGpu,
+        bytes: &[u8],
+        offset: UVec2,
+        size: UVec2
+    ) {
+        vgpu.queue().write_texture(
+            wgpu::TexelCopyTextureInfo {
+                aspect: wgpu::TextureAspect::All,
+                texture: self.texture(),
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: offset.x, y: offset.y, z: 0 },
+            },
+            bytes,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * size.x),
+                rows_per_image: Some(size.y),
+            },
+            wgpu::Extent3d { width: size.x, height: size.y, depth_or_array_layers: 1 }
+        );
     }
 }
 

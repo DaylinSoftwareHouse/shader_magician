@@ -34,7 +34,19 @@ pub struct VirtualGpu {
     queue: wgpu::Queue,
     #[getset(get = "pub", get_mut = "pub")]
     config: wgpu::SurfaceConfiguration,
+    /// Whether the adapter this `VirtualGpu` was created on supports `wgpu::Features::TEXTURE_BINDING_ARRAY`
+    /// and `PARTIALLY_BOUND_BINDING_ARRAY` (true bindless texture arrays, populated incrementally as
+    /// textures load rather than all 128 slots at once). GL/WebGL2 backends never support this; callers
+    /// should fall back to a non-bindless rendering path (e.g. a texture atlas) when this is `false`.
+    #[getset(get = "pub")]
+    supports_bindless_arrays: bool,
 }
+
+/// The `wgpu` features a texture binding array needs: the array binding itself, plus the
+/// ability to bind fewer than the declared array size (gearbox's bindless vault grows its
+/// array from 0 as textures load, so a fixed-size-only array would never validate until all
+/// 128 slots were filled).
+const BINDLESS_ARRAY_FEATURES: wgpu::Features = wgpu::Features::TEXTURE_BINDING_ARRAY.union(wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY);
 
 impl VirtualGpu {
     /// Creates a new `VirtualGpu` from a window instance.
@@ -66,19 +78,26 @@ impl VirtualGpu {
             .await
             .unwrap();
         
+        // a texture-binding-array (true bindless textures) is only usable if the adapter
+        // actually supports it; GL/WebGL2 adapters never do, so callers need to know this to
+        // pick a fallback (atlas-based) rendering path instead
+        let supports_bindless_arrays = adapter.features().contains(BINDLESS_ARRAY_FEATURES);
+
         // create device and queue through adapter
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
-                required_features: wgpu::Features::empty(),
+                required_features: if supports_bindless_arrays { BINDLESS_ARRAY_FEATURES } else { wgpu::Features::empty() },
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_limits: if cfg!(target_arch = "wasm32") {
                     wgpu::Limits::downlevel_webgl2_defaults()
-                } else {
+                } else if supports_bindless_arrays {
                     wgpu::Limits {
                         max_binding_array_elements_per_shader_stage: 128,
                         ..Default::default()
                     }
+                } else {
+                    wgpu::Limits::default()
                 },
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off, // Trace path
@@ -107,6 +126,6 @@ impl VirtualGpu {
             desired_maximum_frame_latency: 2,
         };
 
-        Self { window, surface, device, queue, config }
+        Self { window, surface, device, queue, config, supports_bindless_arrays }
     }
 }

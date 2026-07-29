@@ -181,6 +181,7 @@ impl Vec4 {
     #[inline] pub fn w(self) -> f32 { self.0.w }
 
     #[inline] pub fn xy(self) -> Vec2 { Vec2::new(self.0.x, self.0.y) }
+    #[inline] pub fn zw(self) -> Vec2 { Vec2::new(self.0.z, self.0.w) }
     #[inline] pub fn xyz(self) -> Vec3 { Vec3::new(self.0.x, self.0.y, self.0.z) }
     #[inline] pub fn xyzw(self) -> Self { self }
     #[inline] pub fn wzyx(self) -> Self { Self::new(self.0.w, self.0.z, self.0.y, self.0.x) }
