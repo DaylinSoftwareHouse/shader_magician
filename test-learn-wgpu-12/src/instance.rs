@@ -1,4 +1,4 @@
-use magician_vgpu::glam::{Mat3A, Mat4, Quat, Vec3, Vec4};
+use magician_vgpu::glam::{Mat3, Mat4, Quat, Vec3, Vec4};
 use shaders::common::Camera;
 
 use crate::camera;
@@ -22,7 +22,7 @@ impl Instance {
     pub fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
             model: Mat4::from_rotation_translation(self.rotation, self.position),
-            normal: Mat3A::from_quat(self.rotation)
+            normal: Mat3::from_quat(self.rotation)
         }
     }
 }
@@ -32,7 +32,7 @@ impl Instance {
 #[allow(dead_code)]
 pub struct InstanceRaw {
     pub model: Mat4,
-    pub normal: Mat3A
+    pub normal: Mat3
 }
 
 impl crate::model::Vertex for InstanceRaw {

@@ -14,7 +14,7 @@ prettyplease = "0.2.37"
 glam = { version = "0.33.1", features = ["bytemuck"], public = true }
 derive_more = { version = "2.1.1", features = ["full"] }
 half = "2.7.1"
-ahash = "0.8.12"
+ahash = { version = "0.8.12", default-features = false, features = ["std", "compile-time-rng"] }
 naga = { version = "29", features = ["wgsl-in", "wgsl-out"] }
 bytemuck = "1.25.0"
 
