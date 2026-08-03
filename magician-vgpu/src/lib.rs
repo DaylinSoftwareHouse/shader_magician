@@ -90,7 +90,7 @@ impl VirtualGpu {
                 required_features: if supports_bindless_arrays { BINDLESS_ARRAY_FEATURES } else { wgpu::Features::empty() },
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_limits: if cfg!(target_arch = "wasm32") {
-                    wgpu::Limits::downlevel_webgl2_defaults()
+                    wgpu::Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits())
                 } else if supports_bindless_arrays {
                     wgpu::Limits {
                         max_binding_array_elements_per_shader_stage: 128,

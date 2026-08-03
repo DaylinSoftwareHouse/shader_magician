@@ -387,10 +387,10 @@ impl ApplicationHandler<State> for App {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
         #[cfg(target_arch = "wasm32")]
         {
-            event.window.request_redraw();
+            event.vgpu.window().request_redraw();
             event.resize(
-                event.window.inner_size().width,
-                event.window.inner_size().height,
+                event.vgpu.window().inner_size().width,
+                event.vgpu.window().inner_size().height,
             );
         }
         self.state = Some(event);

@@ -21,18 +21,20 @@ pub struct Instance {
 impl Instance {
     pub fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
-            model: Mat4::from_rotation_translation(self.rotation, self.position),
-            normal: Mat3::from_quat(self.rotation)
+            model: Mat4::from_rotation_translation(self.rotation, self.position).to_cols_array_2d(),
+            normal: Mat3::from_quat(self.rotation).to_cols_array_2d(),
         }
     }
 }
 
+// Plain arrays instead of Mat4/Mat3 avoid the trailing alignment padding
+// glam's SIMD types introduce, which derive(Pod) rejects.
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 #[allow(dead_code)]
 pub struct InstanceRaw {
-    pub model: Mat4,
-    pub normal: Mat3
+    pub model: [[f32; 4]; 4],
+    pub normal: [[f32; 3]; 3],
 }
 
 impl crate::model::Vertex for InstanceRaw {
