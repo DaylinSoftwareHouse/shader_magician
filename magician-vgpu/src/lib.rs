@@ -46,7 +46,8 @@ pub struct VirtualGpu {
 /// ability to bind fewer than the declared array size (gearbox's bindless vault grows its
 /// array from 0 as textures load, so a fixed-size-only array would never validate until all
 /// 128 slots were filled).
-const BINDLESS_ARRAY_FEATURES: wgpu::Features = wgpu::Features::TEXTURE_BINDING_ARRAY.union(wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY);
+const BINDLESS_ARRAY_FEATURES: wgpu::Features = wgpu::Features::TEXTURE_BINDING_ARRAY.union(wgpu::Features::PARTIALLY_BOUND_BINDING_ARRAY)
+    .union(wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING);
 
 impl VirtualGpu {
     /// Creates a new `VirtualGpu` from a window instance.
@@ -94,7 +95,7 @@ impl VirtualGpu {
                 } else if supports_bindless_arrays {
                     wgpu::Limits {
                         max_binding_array_elements_per_shader_stage: 128,
-                        ..Default::default()
+                        ..adapter.limits()
                     }
                 } else {
                     wgpu::Limits::default()
