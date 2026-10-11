@@ -1,6 +1,6 @@
 use magician_ast::{BinaryOp, Expression, LValue, UnaryOp};
 
-use crate::{Transpiler, global::FunctionContext};
+use crate::{Transpiler, global::{FunctionContext, convert_ty, translate_ty_name}};
 
 pub fn convert_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn::Expr) -> Option<Expression> {
     match item {
@@ -67,16 +67,26 @@ pub fn convert_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn:
                 .filter_map(|a| convert_expr(transpiler, func, a))
                 .collect::<Vec<_>>();
 
-            // decode function call
-            if let Some(constructor) = convert_constructor_name(&func_name) {
-                Some(Expression::TypeConstruct(constructor, args))
-            } else if func_name.len() > 0 {
-                let func_name = func_name[func_name.len() - 1].clone();
-                let func_name = convert_builtin_fn_names(&func_name);
-                Some(Expression::Call(Box::new(Expression::Identifier(func_name)), args))
-            } else {
-                None
+            // decode vector and matrix constructors
+            if let Some(constructor) = convert_constructor(&func_name, args.clone()) {
+                return Some(constructor);
             }
+            let Some(func_name) = func_name.last() else { return None };
+
+            // functions defined in the shader keep their names
+            if transpiler.is_user_fn(func_name) {
+                return Some(Expression::Call(Box::new(Expression::Identifier(func_name.clone())), args));
+            }
+
+            // component-wise comparisons are operators in WGSL
+            let func_name = convert_builtin_fn_name(func_name);
+            if let Some(op) = comparison_op(&func_name) {
+                let [left, right] = <[Expression; 2]>::try_from(args)
+                    .unwrap_or_else(|_| panic!("{func_name} takes exactly 2 arguments"));
+                return Some(Expression::Binary(Box::new(left), op, Box::new(right)));
+            }
+
+            Some(Expression::Call(Box::new(Expression::Identifier(func_name)), args))
         },
 
         syn::Expr::Field(expr_field) => {
@@ -108,15 +118,7 @@ pub fn convert_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn:
             } else { None }
         },
 
-        syn::Expr::Lit(expr_lit) => {
-            match &expr_lit.lit {
-                syn::Lit::Byte(lit_byte) => Some(Expression::IntLiteral(lit_byte.value().to_string())),
-                syn::Lit::Int(lit_int) => Some(Expression::IntLiteral(lit_int.to_string())),
-                syn::Lit::Float(lit_float) => Some(Expression::FloatLiteral(lit_float.to_string())),
-                syn::Lit::Bool(lit_bool) => Some(Expression::BoolLiteral(lit_bool.value)),
-                _ => panic!("Invalid literal {:?}", expr_lit.lit),
-            }
-        },
+        syn::Expr::Lit(expr_lit) => Some(convert_lit(&expr_lit.lit)),
 
         syn::Expr::MethodCall(expr_method_call) => {
             let Some(inner) = convert_expr(transpiler, func, &*expr_method_call.receiver)
@@ -173,9 +175,23 @@ pub fn convert_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn:
                 .map(|expr| Expression::Paren(Box::new(expr)))
         }
 
+        syn::Expr::Array(expr_array) => {
+            let elems = expr_array.elems.iter()
+                .filter_map(|a| convert_expr(transpiler, func, a))
+                .collect();
+            Some(Expression::TypeConstruct("array".to_string(), elems))
+        },
+
         syn::Expr::Tuple(expr_tuple) => todo!("Tuple support: {expr_tuple:?}"),
         syn::Expr::Infer(expr_infer) => todo!("Infered types: {expr_infer:?}"),
-        syn::Expr::Cast(cast) => convert_expr(transpiler, func, &cast.expr),
+        syn::Expr::Cast(cast) => {
+            let inner = convert_expr(transpiler, func, &cast.expr)?;
+            let ty = convert_ty(&cast.ty);
+
+            // usize/isize casts only exist to satisfy rust indexing, WGSL indexes with any integer
+            if ty == "usize" || ty == "isize" { return Some(inner) }
+            Some(Expression::TypeConstruct(ty, vec![inner]))
+        },
 
         _ => panic!("Unsupported expression: {:?}", item)
     }
@@ -200,69 +216,128 @@ pub fn convert_expr_to_lvalue(transpiler: &Transpiler, expr: &Expression) -> Opt
     }
 }
 
-pub fn convert_pat_to_expr(transpiler: &Transpiler, pat: &syn::Pat) -> Option<Expression> {
+/// Converts a `match` arm pattern into `switch` case selectors, `None` being `default`.
+pub fn convert_pat_to_selectors(pat: &syn::Pat) -> Vec<Option<Expression>> {
     match pat {
-        syn::Pat::Ident(pat_ident) => 
-            Some(Expression::Identifier(pat_ident.ident.to_string())),
+        syn::Pat::Lit(expr_lit) => vec![Some(convert_lit(&expr_lit.lit))],
+        syn::Pat::Wild(_) => vec![None],
+        syn::Pat::Or(pat_or) => pat_or.cases.iter().flat_map(convert_pat_to_selectors).collect(),
+        syn::Pat::Paren(paren) => convert_pat_to_selectors(&paren.pat),
+        syn::Pat::Ident(pat_ident) if pat_ident.subpat.is_none() =>
+            panic!("Binding match patterns like `{}` are not supported, use `_`", pat_ident.ident),
+        other => panic!("Unsupported match pattern, only literals, `|` and `_` are allowed: {other:?}")
+    }
+}
 
-        syn::Pat::Lit(expr_lit) => 
-            match &expr_lit.lit {
-                syn::Lit::Byte(lit_byte) => Some(Expression::IntLiteral(lit_byte.value().to_string())),
-                syn::Lit::Int(lit_int) => Some(Expression::IntLiteral(lit_int.to_string())),
-                syn::Lit::Float(lit_float) => Some(Expression::FloatLiteral(lit_float.to_string())),
-                syn::Lit::Bool(lit_bool) => Some(Expression::BoolLiteral(lit_bool.value)),
-                _ => panic!("Invalid literal {:?}", expr_lit.lit),
-            },
+/// Converts a rust literal to a WGSL literal, mapping type suffixes (`1u32` -> `1u`).
+pub fn convert_lit(lit: &syn::Lit) -> Expression {
+    match lit {
+        syn::Lit::Byte(lit_byte) => Expression::IntLiteral(lit_byte.value().to_string()),
+        syn::Lit::Int(lit_int) => {
+            let digits = lit_int.base10_digits();
+            match lit_int.suffix() {
+                "" | "usize" | "isize" => Expression::IntLiteral(digits.to_string()),
+                "u32" => Expression::IntLiteral(format!("{digits}u")),
+                "i32" => Expression::IntLiteral(format!("{digits}i")),
+                "f32" => Expression::FloatLiteral(format!("{digits}f")),
+                "f16" => Expression::FloatLiteral(format!("{digits}h")),
+                "f64" => Expression::FloatLiteral(format!("{digits}.0")),
+                other => panic!("WGSL has no {other} type, found literal {lit_int}")
+            }
+        },
+        syn::Lit::Float(lit_float) => {
+            let digits = lit_float.base10_digits();
+            match lit_float.suffix() {
+                "" | "f64" => Expression::FloatLiteral(digits.to_string()),
+                "f32" => Expression::FloatLiteral(format!("{digits}f")),
+                "f16" => Expression::FloatLiteral(format!("{digits}h")),
+                other => panic!("WGSL has no {other} type, found literal {lit_float}")
+            }
+        },
+        syn::Lit::Bool(lit_bool) => Expression::BoolLiteral(lit_bool.value),
+        other => panic!("Invalid literal {other:?}"),
+    }
+}
 
-        syn::Pat::Or(pat_or) => {
-            pat_or.cases.iter()
-                .fold(None, |prev, pat| {
-                    if let Some(prev) = prev {
-                        let new = convert_pat_to_expr(transpiler, pat)
-                            .expect("Failed or creation in pat conversion");
-                        Some(Expression::Binary(Box::new(prev), BinaryOp::Or, Box::new(new)))
-                    } else {
-                        convert_pat_to_expr(transpiler, pat)
-                    }
+/// Converts a call like `Vec3::new(..)` or `Mat4::identity()` on a built-in vector,
+/// matrix, texture or sampler type to a WGSL constructor.  Returns `None` for any
+/// other call.
+fn convert_constructor(segments: &[String], args: Vec<Expression>) -> Option<Expression> {
+    // handle two segment constructors (i.e. Vec2::new or Mat4::identity)
+    if segments.len() < 2 { return None }
+    let ty = translate_ty_name(&segments[segments.len() - 2]);
+    let method = segments[segments.len() - 1].as_str();
+    let is_builtin = ty.starts_with("vec") || ty.starts_with("mat") || ty == "texture_2d<f32>" || ty == "sampler";
+    if !is_builtin { return None }
+
+    match method {
+        // zero value constructor
+        "zero" => Some(Expression::TypeConstruct(ty.to_string(), vec![])),
+
+        // build identity matrices column by column
+        "identity" if ty.starts_with("mat") => {
+            let size = ty[3..4].parse::<usize>().expect("Matrix type has no size");
+            let scalar = &ty[ty.find('<')? + 1 .. ty.len() - 1];
+            let columns = (0 .. size)
+                .map(|col| {
+                    let rows = (0 .. size)
+                        .map(|row| Expression::FloatLiteral(if row == col { "1.0" } else { "0.0" }.to_string()))
+                        .collect();
+                    Expression::TypeConstruct(format!("vec{size}<{scalar}>"), rows)
                 })
+                .collect();
+            Some(Expression::TypeConstruct(ty.to_string(), columns))
         },
 
+        // all other constructors (new, splat, from_vec3_w, ...) map their arguments directly
+        _ => Some(Expression::TypeConstruct(ty.to_string(), args))
+    }
+}
+
+/// Type suffixes used to name the per-type variants of built-in functions.
+const TYPE_SUFFIXES: &[&str] = &[
+    "vec2", "vec3", "vec4", "dvec2", "dvec3", "dvec4",
+    "ivec2", "ivec3", "ivec4", "uvec2", "uvec3", "uvec4",
+    "bvec2", "bvec3", "bvec4", "mat2", "mat3", "mat4",
+    "dmat2", "dmat3", "dmat4", "f32", "u32", "i32"
+];
+
+/// Converts the rust name of a built-in function to its WGSL name, by dropping the
+/// type suffix and variant markers and converting it to camel case
+/// (`inverse_sqrt_vec3` -> `inverseSqrt`, `mix_vec3_t` -> `mix`).
+fn convert_builtin_fn_name(name: &str) -> String {
+    let mut tokens = name.split('_').collect::<Vec<_>>();
+
+    // drop variant markers that follow a type suffix (mix_vec3_t, pow_vec3_cw) and round_wgsl
+    if tokens.len() > 2 && matches!(tokens[tokens.len() - 1], "t" | "cw") && TYPE_SUFFIXES.contains(&tokens[tokens.len() - 2]) {
+        tokens.pop();
+    }
+    if tokens.len() > 1 && tokens[tokens.len() - 1] == "wgsl" { tokens.pop(); }
+
+    // drop the type suffix
+    if tokens.len() > 1 && TYPE_SUFFIXES.contains(&tokens[tokens.len() - 1]) { tokens.pop(); }
+
+    // convert to camel case
+    let mut result = tokens[0].to_string();
+    for token in &tokens[1..] {
+        let mut chars = token.chars();
+        if let Some(first) = chars.next() {
+            result.extend(first.to_uppercase());
+            result.push_str(chars.as_str());
+        }
+    }
+    return result;
+}
+
+/// The operator for a component-wise comparison function, `equal` -> `==`.
+fn comparison_op(wgsl_name: &str) -> Option<BinaryOp> {
+    match wgsl_name {
+        "equal" => Some(BinaryOp::Eq),
+        "notEqual" => Some(BinaryOp::Ne),
+        "lessThan" => Some(BinaryOp::Lt),
+        "lessThanEqual" => Some(BinaryOp::Le),
+        "greaterThan" => Some(BinaryOp::Gt),
+        "greaterThanEqual" => Some(BinaryOp::Ge),
         _ => None
-    }
-}
-
-fn convert_constructor_name(segments: &[String]) -> Option<String> {
-    // handle two segment constructors (i.e. Vec2::new or Mat4::from_cols)
-    if segments.len() >= 2 {
-        // convert built-in constructors
-        let result = match segments[segments.len() - 2].as_str() {
-            "Vec2" | "DVec2" | "UVec2" | "IVec2" | "BVec2" => Some("vec2"), 
-            "Vec3" | "DVec3" | "UVec3" | "IVec3" | "BVec3" => Some("vec3"), 
-            "Vec4" | "DVec4" | "UVec4" | "IVec4" | "BVec4" => Some("vec4"),
-            "Mat2" | "DMat2" | "UMat2" | "IMat2" | "BMat2" => Some("mat2x2"), 
-            "Mat3" | "DMat3" | "UMat3" | "IMat3" | "BMat3" => Some("mat3x3"), 
-            "Mat4" | "DMat4" | "UMat4" | "IMat4" | "BMat4" => Some("mat4x4"),
-            "Texture2D" => Some("texture_2d<f32>"),
-            "Sampler" => Some("sampler"),
-            _ => None
-        };
-
-        // return built-in if found
-        if let Some(result) = result { return Some(result.to_string()) }
-    }
-
-    None
-}
-
-fn convert_builtin_fn_names(name: &str) -> String {
-    let tokens = name.split("_").collect::<Vec<_>>();
-    if tokens.len() != 2 { return name.to_string(); }
-
-    match tokens[1] {
-        "vec2" | "vec3" | "vec4" | "dvec3" | "dvec2" | "dvec4" |
-        "ivec2" | "ivec3" | "ivec4" | "uvec2" | "uvec3" | "uvec4" |
-        "bvec2" | "bvec3" | "bvec4" | "mat2" | "mat3" | "mat4" |
-        "dmat2" | "dmat3" | "dmat4" | "f32" | "u32" | "i32" => tokens[0].to_string(),
-        _ => name.to_string()
     }
 }

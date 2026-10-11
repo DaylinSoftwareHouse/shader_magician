@@ -347,14 +347,18 @@ fn emit_stmt(stmt: &Statement, indent: usize, out: &mut String) {
             out.push_str(&emit_expr(&s.selector));
             out.push_str(" {\n");
             for case in &s.cases {
-                for sel in &case.selectors {
-                    out.push_str(&pad(indent + 1));
-                    match sel {
-                        None    => out.push_str("default"),
-                        Some(e) => { out.push_str("case "); out.push_str(&emit_expr(e)); }
-                    }
-                    out.push_str(": ");
+                // a lone default is `default:`, otherwise selectors are listed as `case a, b, default:`
+                out.push_str(&pad(indent + 1));
+                if case.selectors.iter().all(|sel| sel.is_none()) {
+                    out.push_str("default");
+                } else {
+                    let selectors = case.selectors.iter()
+                        .map(|sel| sel.as_ref().map(emit_expr).unwrap_or_else(|| "default".to_string()))
+                        .collect::<Vec<_>>();
+                    out.push_str("case ");
+                    out.push_str(&selectors.join(", "));
                 }
+                out.push_str(": ");
                 emit_block_inner(&case.body, indent + 1, out);
                 out.push('\n');
             }
@@ -460,5 +464,27 @@ fn binary_op_str(op: BinaryOp) -> &'static str {
         BinaryOp::Eq  => "==", BinaryOp::Ne  => "!=",
         BinaryOp::Lt  => "<",  BinaryOp::Le  => "<=",
         BinaryOp::Gt  => ">",  BinaryOp::Ge  => ">=",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::BlockParser;
+
+    #[test]
+    fn switch_case_lists_round_trip() {
+        let src = "{ switch x { case 1, 2: { y = 1; } case 3, default: { y = 2; } } }";
+        let block = BlockParser::new(src).parse_block().unwrap();
+        let emitted = emit_block(&block, 0);
+        assert!(emitted.contains("case 1, 2: {"), "{emitted}");
+        assert!(emitted.contains("case 3, default: {"), "{emitted}");
+        assert_eq!(BlockParser::new(&emitted).parse_block().unwrap(), block);
+    }
+
+    #[test]
+    fn lone_default_case() {
+        let block = BlockParser::new("{ switch x { default: { } } }").parse_block().unwrap();
+        assert!(emit_block(&block, 0).contains("default: {"));
     }
 }

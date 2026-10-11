@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use ahash::AHashMap;
 use magician_ast::*;
 
-use crate::{TranspiledStruct, TranspiledStructField, Transpiler, stmts};
+use crate::{TranspiledStruct, TranspiledStructField, Transpiler, expr, stmts};
 
 #[derive(Default)]
 pub struct FunctionContext {
@@ -72,10 +72,22 @@ pub(crate) fn convert_function(
             }
         })
         .map(convert_fn_arg).collect::<Vec<_>>();
-    let block = convert_block(transpiler, &func, &*item.block);
     let ret_ty = match &item.sig.output {
         syn::ReturnType::Default => None,
         syn::ReturnType::Type(_, ty) => Some(convert_ty(&*ty))
+    };
+    let block = match item.block.stmts.split_last() {
+        // a trailing expression is the function's return value
+        Some((syn::Stmt::Expr(tail, None), body)) if ret_ty.is_some() && is_value_expr(tail) => {
+            let value = expr::convert_expr(transpiler, &func, tail)
+                .expect("Failed to convert the function's trailing return expression");
+            let mut stmts = body.iter()
+                .flat_map(|a| stmts::convert_stmt(transpiler, &func, a))
+                .collect::<Vec<_>>();
+            stmts.push(Statement::Return(Some(value)));
+            Block { stmts }
+        },
+        _ => convert_block(transpiler, &func, &*item.block)
     };
 
     if name == *transpiler.entry_point { attrs.push(Attr { name: transpiler.shader_ty.clone(), content: "".into() }); }
@@ -163,6 +175,16 @@ fn convert_fn_arg(item: &syn::FnArg) -> Param {
     }
 }
 
+/// Returns true if `expr` produces a value as a trailing expression, rather than being
+/// control flow that is converted as a statement (`if`, `match`, loops, `return`, ...).
+fn is_value_expr(expr: &syn::Expr) -> bool {
+    !matches!(expr,
+        syn::Expr::If(_) | syn::Expr::Match(_) | syn::Expr::While(_) | syn::Expr::Loop(_) |
+        syn::Expr::ForLoop(_) | syn::Expr::Block(_) | syn::Expr::Return(_) | syn::Expr::Break(_) |
+        syn::Expr::Continue(_) | syn::Expr::Assign(_)
+    )
+}
+
 fn convert_block(transpiler: &Transpiler, func: &FunctionContext, item: &syn::Block) -> Block {
     Block { stmts: item.stmts.iter().flat_map(|a| stmts::convert_stmt(transpiler, func, a)).collect() }
 }
@@ -234,7 +256,7 @@ pub fn convert_ty(ty: &syn::Type) -> String {
     }
 }
 
-fn translate_ty_name(name: &str) -> &str {
+pub(crate) fn translate_ty_name(name: &str) -> &str {
     match name {
         "Vec2" => "vec2<f32>",
         "Vec3" => "vec3<f32>",

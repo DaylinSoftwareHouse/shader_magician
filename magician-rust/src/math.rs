@@ -305,6 +305,34 @@ impl BVec4 {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Color swizzles – `rgba` aliases of the `xyzw` swizzles above, matching WGSL
+// ─────────────────────────────────────────────────────────────────────────────
+
+macro_rules! impl_rgba_swizzles {
+    ($T:ty { $($rgba:ident => $xyzw:ident: $Out:ty),* $(,)? }) => {
+        impl $T {
+            $( #[inline] pub fn $rgba(self) -> $Out { self.$xyzw() } )*
+        }
+    };
+}
+
+impl_rgba_swizzles!(Vec2 { r => x: f32, g => y: f32, rr => xx: Vec2, rg => xy: Vec2, gr => yx: Vec2, gg => yy: Vec2 });
+impl_rgba_swizzles!(Vec3 { r => x: f32, g => y: f32, b => z: f32, rg => xy: Vec2, rb => xz: Vec2, gb => yz: Vec2, rgb => xyz: Vec3, bgr => zyx: Vec3 });
+impl_rgba_swizzles!(Vec4 { r => x: f32, g => y: f32, b => z: f32, a => w: f32, rg => xy: Vec2, ba => zw: Vec2, rgb => xyz: Vec3, rgba => xyzw: Vec4, abgr => wzyx: Vec4 });
+impl_rgba_swizzles!(DVec2 { r => x: f64, g => y: f64 });
+impl_rgba_swizzles!(DVec3 { r => x: f64, g => y: f64, b => z: f64, rg => xy: DVec2 });
+impl_rgba_swizzles!(DVec4 { r => x: f64, g => y: f64, b => z: f64, a => w: f64, rg => xy: DVec2, rgb => xyz: DVec3 });
+impl_rgba_swizzles!(IVec2 { r => x: i32, g => y: i32 });
+impl_rgba_swizzles!(IVec3 { r => x: i32, g => y: i32, b => z: i32, rg => xy: IVec2 });
+impl_rgba_swizzles!(IVec4 { r => x: i32, g => y: i32, b => z: i32, a => w: i32, rg => xy: IVec2, rgb => xyz: IVec3 });
+impl_rgba_swizzles!(UVec2 { r => x: u32, g => y: u32 });
+impl_rgba_swizzles!(UVec3 { r => x: u32, g => y: u32, b => z: u32, rg => xy: UVec2 });
+impl_rgba_swizzles!(UVec4 { r => x: u32, g => y: u32, b => z: u32, a => w: u32, rg => xy: UVec2, rgb => xyz: UVec3 });
+impl_rgba_swizzles!(BVec2 { r => x: bool, g => y: bool });
+impl_rgba_swizzles!(BVec3 { r => x: bool, g => y: bool, b => z: bool });
+impl_rgba_swizzles!(BVec4 { r => x: bool, g => y: bool, b => z: bool, a => w: bool });
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Mat2 / Mat3 / Mat4 – constructors
 // ─────────────────────────────────────────────────────────────────────────────
 impl Mat2 {

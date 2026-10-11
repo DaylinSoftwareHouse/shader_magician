@@ -237,15 +237,18 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, func: &FunctionContext, item: 
                 else { return vec![] };
 
             let cases = expr_match.arms.iter()
-                .filter_map(|case| {
-                    let selector = expr::convert_pat_to_expr(transpiler, &case.pat);
-                    let syn::Expr::Block(block) = &*case.body else { return None };
-                    let body = Block {
-                        stmts: block.block.stmts.iter()
+                .map(|case| {
+                    if case.guard.is_some() { panic!("Match guards are not supported in shaders") }
+                    let selectors = expr::convert_pat_to_selectors(&case.pat);
+
+                    // arms are either blocks or a single expression like `1 => x = 2`
+                    let stmts = match &*case.body {
+                        syn::Expr::Block(block) => block.block.stmts.iter()
                             .flat_map(|stmt| convert_stmt(transpiler, func, stmt))
-                            .collect()
+                            .collect(),
+                        other => convert_stmt_expr(transpiler, func, other)
                     };
-                    Some(SwitchCase { selectors: vec![selector], body })
+                    SwitchCase { selectors, body: Block { stmts } }
                 })
                 .collect::<Vec<SwitchCase>>();
 
