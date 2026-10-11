@@ -28,9 +28,13 @@ impl RenderFrame {
     ///         VirtualGpu is still loading asychronously in the background.
     ///   - An error value if the VirtualGpu is in an illegal state that
     ///         does not allow the frame to be created.
+    ///
+    /// The next redraw is requested when a frame is created, or when the
+    /// surface was outdated and has been reconfigured.  Otherwise (zero sized,
+    /// occluded, timed out) no redraw is requested, so the caller decides when
+    /// to try again rather than spinning while the window can't be drawn to.
     pub fn begin(vgpu: &VirtualGpu) -> anyhow::Result<Option<Self>> {
-        vgpu.window().request_redraw();
-        if !vgpu.config().width < 1 { return Ok(None); }
+        if vgpu.config().width < 1 || vgpu.config().height < 1 { return Ok(None); }
 
         let output = match vgpu.surface().get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
@@ -46,6 +50,7 @@ impl RenderFrame {
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
                 vgpu.surface().configure(&vgpu.device(), &vgpu.config());
+                vgpu.window().request_redraw();
                 return Ok(None);
             }
             wgpu::CurrentSurfaceTexture::Lost => {
@@ -54,6 +59,7 @@ impl RenderFrame {
                 anyhow::bail!("Lost device");
             }
         };
+        vgpu.window().request_redraw();
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
