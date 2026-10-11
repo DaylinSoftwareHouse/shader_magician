@@ -216,9 +216,7 @@ impl State {
         if width > 0 && height > 0 {
             self.projection.resize(width, height);
             self.is_surface_configured = true;
-            self.vgpu.config_mut().width = width;
-            self.vgpu.config_mut().height = height;
-            self.vgpu.surface().configure(self.vgpu.device(), self.vgpu.config());
+            self.vgpu.resize(width, height);
             
             self.depth_texture = texture::Texture::create_depth_texture(&self.vgpu).0;
         }
@@ -387,11 +385,9 @@ impl ApplicationHandler<State> for App {
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
         #[cfg(target_arch = "wasm32")]
         {
-            event.vgpu.window().request_redraw();
-            event.resize(
-                event.vgpu.window().inner_size().width,
-                event.vgpu.window().inner_size().height,
-            );
+            event.vgpu.request_redraw();
+            let size = event.vgpu.window().expect("windowed VirtualGpu").inner_size();
+            event.resize(size.width, size.height);
         }
         self.state = Some(event);
     }

@@ -122,7 +122,7 @@ impl<T: TreeBufferContent> TreeBuffer<T> {
 /// be written to the buffer. The root is always index 0. Sibling `next_ptr`
 /// chains and parent `first_child_ptr`s are wired up as we go.
 fn flatten_tree<'a, T: TreeBufferContent>(vgpu: &VirtualGpu, root: &T::InputType, input: &'a T::ConvertInput<'a>) -> anyhow::Result<Vec<T>> {
-    let mut output: Vec<T> = vec![T::new_gpu_type(vgpu, root, input, std::u32::MAX, std::u32::MAX)?];
+    let mut output: Vec<T> = vec![T::new_gpu_type(vgpu, root, input, u32::MAX, u32::MAX)?];
 
     // (input node, its index in `output`)
     let mut queue: VecDeque<(&T::InputType, usize)> = VecDeque::new();
@@ -140,7 +140,7 @@ fn flatten_tree<'a, T: TreeBufferContent>(vgpu: &VirtualGpu, root: &T::InputType
         let mut prev_idx: Option<usize> = None;
         for child in children {
             let child_idx = output.len();
-            output.push(T::new_gpu_type(vgpu, child, input, std::u32::MAX, std::u32::MAX)?);
+            output.push(T::new_gpu_type(vgpu, child, input, u32::MAX, u32::MAX)?);
 
             if let Some(p) = prev_idx {
                 output[p].set_next_ptr(child_idx as u32);
