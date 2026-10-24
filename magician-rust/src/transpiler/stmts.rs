@@ -53,6 +53,9 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, func: &FunctionContext, item: 
     match item {
         syn::Expr::Break(_expr_break) => vec![Statement::Break],
         syn::Expr::Continue(_expr_continue) => vec![Statement::Continue],
+
+        // `discard()` is a statement in WGSL, not a function call
+        syn::Expr::Call(expr_call) if is_discard_call(expr_call) => vec![Statement::Discard],
         syn::Expr::Return(expr_return) => 
             vec![Statement::Return(expr_return.expr.as_ref().map(|a| expr::convert_expr(transpiler, func, &*a)).flatten())],
         
@@ -261,4 +264,11 @@ pub fn convert_stmt_expr(transpiler: &Transpiler, func: &FunctionContext, item: 
             vec![Statement::Expression(expression)]
         }
     }
+}
+
+/// Whether a call is `discard()`, which becomes WGSL's `discard;` statement.
+fn is_discard_call(expr_call: &syn::ExprCall) -> bool {
+    let syn::Expr::Path(func_name) = &*expr_call.func else { return false };
+    expr_call.args.is_empty()
+        && func_name.path.segments.last().is_some_and(|segment| segment.ident == "discard")
 }
