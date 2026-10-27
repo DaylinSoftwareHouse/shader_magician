@@ -95,7 +95,7 @@ impl VirtualGpu {
             width: size.width,
             height: size.height,
             present_mode: surface_caps.present_modes[0],
-            alpha_mode: surface_caps.alpha_modes[0],
+            alpha_mode: pick_alpha_mode(&surface_caps.alpha_modes),
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
@@ -172,15 +172,36 @@ impl VirtualGpu {
 /// Creates the `wgpu` instance for this platform's backends.
 fn create_instance() -> wgpu::Instance {
     wgpu::Instance::new(wgpu::InstanceDescriptor {
-        #[cfg(not(target_arch = "wasm32"))]
+        // windows drivers' vulkan surfaces are opaque only, so use dx12 there
+        #[cfg(target_os = "windows")]
+        backends: wgpu::Backends::DX12,
+        #[cfg(not(any(target_os = "windows", target_arch = "wasm32")))]
         backends: wgpu::Backends::PRIMARY,
         #[cfg(target_arch = "wasm32")]
         backends: wgpu::Backends::GL,
         flags: Default::default(),
         memory_budget_thresholds: Default::default(),
-        backend_options: Default::default(),
+        backend_options: wgpu::BackendOptions {
+            // present through DirectComposition, the only dx12 swapchain that supports
+            // transparent windows. `WGPU_DX12_PRESENTATION_SYSTEM=Hwnd` switches back, e.g. for RenderDoc
+            dx12: wgpu::Dx12BackendOptions {
+                presentation_system: wgpu::Dx12SwapchainKind::DxgiFromVisual.with_env(),
+                ..wgpu::Dx12BackendOptions::from_env_or_default()
+            },
+            ..wgpu::BackendOptions::from_env_or_default()
+        },
         display: None,
     })
+}
+
+/// Picks a composite alpha mode that blends the surface with what's behind the window, so
+/// transparent clear colors and pixels show through, falling back to the first supported.
+/// Colors are premultiplied when the surface uses [`wgpu::CompositeAlphaMode::PreMultiplied`].
+fn pick_alpha_mode(supported: &[wgpu::CompositeAlphaMode]) -> wgpu::CompositeAlphaMode {
+    [wgpu::CompositeAlphaMode::PreMultiplied, wgpu::CompositeAlphaMode::PostMultiplied]
+        .into_iter()
+        .find(|mode| supported.contains(mode))
+        .unwrap_or(supported[0])
 }
 
 /// Requests a device and queue from `adapter`, with bindless texture arrays if supported.
