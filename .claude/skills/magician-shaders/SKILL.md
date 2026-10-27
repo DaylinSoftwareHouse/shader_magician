@@ -76,13 +76,14 @@ pub fn my_vs_main(#[group = 0] cam: CameraInput, model: VertexInput) -> VertexOu
 ```
 
 Rules that follow from how the transpiler works:
-- **Stage** is `vertex` or `fragment`. It becomes the `@vertex`/`@fragment` attribute, and the WGSL entry point keeps the Rust function's name. Pass that name as `ShaderSource::main_function`.
+- **Stage** is `vertex`, `fragment`, or `compute(x[, y[, z]])`. It becomes the `@vertex`/`@fragment` attribute, or `@compute @workgroup_size(x, y, z)`, and the WGSL entry point keeps the Rust function's name. Pass that name as `ShaderSource::main_function`. Compute builtins (`workgroup_id`, `local_invocation_index`, ...) go on a `ShaderLayout` input struct, the same as vertex inputs. See `test-shaders/src/compute.rs`.
 - **Group params** (`#[group = N] x: SomeShaderGroup`) are removed from the WGSL signature. Each struct field becomes a global, and `x.field` is rewritten to the bare global name `field`. As a result:
   - Field names must be unique across every group a shader uses.
   - A group param must not share a name with any of those fields.
   - Bindings are numbered in field declaration order, starting at 0.
 - A group struct the entry point names without `#[group = N]` is silently dropped. Always give the index.
-- `#[uniform]` gives `var<uniform>`. Fields with no attribute (`Texture2D`, `Sampler`, `BindlessArray<Texture2D>`) give a plain `var`. `#[read]`/`#[write]` are not implemented yet.
+- `#[uniform]` gives `var<uniform>`. `#[read]` (or `#[storage]`) gives `var<storage, read>`, and `#[write]` (or `#[read_write]`) gives `var<storage, read_write>`; use `RuntimeArray<T>` (`array<T>`) for buffers of unknown length. `#[workgroup]` gives `var<workgroup>` with no `@group`/`@binding` and does not use a binding slot. Fields with no attribute (`Texture2D`, `Sampler`, `BindlessArray<Texture2D>`) give a plain `var`.
+- Writing to a group field (`b.y[i] = v`, `b.partial[i] += v`) needs the group param to be `mut` on the Rust side: `#[group = 0] mut b: Bindings`.
 - Uniform structs must match WGSL alignment. Pad each `Vec3` to 16 bytes (see `Light { position: Vec3, _pad0: u32, ... }` in `test-learn-wgpu-12/shaders/src/common.rs`).
 - Helpers: plain `fn`s, structs, and impls in the same crate are found by name resolution and emitted automatically, whichever module they live in. Code from other crates is not, apart from `magician_rust` builtins.
 - If one shader's dependency graph pulls in two structs with the same name (for example `VertexOutput` from two modules), they collide. Keep per-shader I/O structs in that shader's module.

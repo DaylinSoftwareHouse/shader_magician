@@ -10,7 +10,7 @@ pub mod visit;
 pub use index::*;
 pub use resolver::*;
 pub use stitch::*;
-use syn::{Ident, LitStr, Token, parse::ParseStream};
+use syn::{Ident, LitStr, Token, parse::{Parse, ParseStream}};
 pub use visit::*;
 
 pub fn build(
@@ -150,9 +150,18 @@ fn get_shader_attr(f: &syn::ItemFn) -> Option<String> {
             let _path: LitStr = input.parse()?;
             input.parse::<Token![,]>()?;
             let stage: Ident = input.parse()?;
-            Ok(stage)
+
+            // compute stages carry their workgroup size: `compute(8, 8)` -> "compute(8, 8)"
+            if input.peek(syn::token::Paren) {
+                let content;
+                syn::parenthesized!(content in input);
+                let dims = content.parse_terminated(syn::LitInt::parse, Token![,])?;
+                let dims = dims.iter().map(|d| d.base10_digits()).collect::<Vec<_>>().join(", ");
+                return Ok(format!("{stage}({dims})"));
+            }
+            Ok(stage.to_string())
         });
 
-        ty.ok().map(|a| a.to_string())
+        ty.ok()
     })
 }

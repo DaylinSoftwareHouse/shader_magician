@@ -14,3 +14,5 @@ quote = "1"
 [dev-dependencies]
 magician-vgpu = { path = "../magician-vgpu" }
 pollster = "1.0.1"
+wgpu = "29.0"
+bytemuck = "1"

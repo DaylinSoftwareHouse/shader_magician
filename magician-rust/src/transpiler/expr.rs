@@ -78,6 +78,12 @@ pub fn convert_expr(transpiler: &Transpiler, func: &FunctionContext, item: &syn:
                 return Some(Expression::Call(Box::new(Expression::Identifier(func_name.clone())), args));
             }
 
+            // bitcasts are generic in WGSL, `bitcast_f32(x)` -> `bitcast<f32>(x)`
+            if let Some(ty) = func_name.strip_prefix("bitcast_") {
+                if !matches!(ty, "f32" | "u32" | "i32") { panic!("bitcast_{ty} is not a supported bitcast target") }
+                return Some(Expression::Call(Box::new(Expression::Identifier(format!("bitcast<{ty}>"))), args));
+            }
+
             // component-wise comparisons are operators in WGSL
             let func_name = convert_builtin_fn_name(func_name);
             if let Some(op) = comparison_op(&func_name) {

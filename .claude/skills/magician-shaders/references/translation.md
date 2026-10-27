@@ -12,6 +12,7 @@ The source of truth is `magician-rust/src/transpiler/{global,expr,stmts}.rs` and
 | `Texture2D` | `texture_2d<f32>` |
 | `Sampler` | `sampler` |
 | `BindlessArray<T>` | `binding_array<T>` (group field only, 128 slots at runtime) |
+| `RuntimeArray<T>` | `array<T>` (storage group field only) |
 | `[T; N]` (N must be an integer literal) | `array<T, N>` |
 | any other path | its last segment, unchanged, so your own structs keep their names |
 
@@ -60,6 +61,8 @@ Every built-in in `math.rs` translates this way, for example `abs_* acos atan2 c
 
 `equal_* not_equal_* less_than_* less_than_equal_* greater_than_* greater_than_equal_*` become the `== != < <= > >=` operators, which give a `vecN<bool>`.
 
+`bitcast_f32(x)`, `bitcast_u32(x)` and `bitcast_i32(x)` become `bitcast<f32>(x)` and so on (scalars only). `workgroup_barrier()` and `storage_barrier()` become `workgroupBarrier()`/`storageBarrier()` through the camelCase rule. `subgroup_add_f32(x)` becomes `subgroupAdd(x)`; it needs `wgpu::Features::SUBGROUP` on the device, and the subgroup builtins (`subgroup_invocation_id`, `subgroup_size`) go on a `ShaderLayout` input like any other builtin. naga takes no `enable subgroups;` directive.
+
 `frexp` and `modf` return tuples, so they can't be used.
 
 ## Statements (stmts.rs)
@@ -89,3 +92,7 @@ Every built-in in `math.rs` translates this way, for example `abs_* acos atan2 c
 | `#[builtin = "position"]` (any builtin name) | `@builtin(position)` |
 | `#[group = N]` on an entry-point param of a `ShaderGroup` type | fields become `@group(N) @binding(i)` globals |
 | `#[uniform]` on a group field | `var<uniform>` |
+| `#[read]` / `#[storage]` on a group field | `var<storage, read>` |
+| `#[write]` / `#[read_write]` on a group field | `var<storage, read_write>` |
+| `#[workgroup]` on a group field | `var<workgroup>`, no `@group`/`@binding` |
+| `#[shader("..", compute(64))]` | `@compute @workgroup_size(64)` |

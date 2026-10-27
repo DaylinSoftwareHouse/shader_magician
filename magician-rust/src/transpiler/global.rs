@@ -90,12 +90,25 @@ pub(crate) fn convert_function(
         _ => convert_block(transpiler, &func, &*item.block)
     };
 
-    if name == *transpiler.entry_point { attrs.push(Attr { name: transpiler.shader_ty.clone(), content: "".into() }); }
+    if name == *transpiler.entry_point { attrs.extend(stage_attrs(&transpiler.shader_ty)); }
 
     (
         name.clone(),
         ShaderElement::Function { attrs, name, params, ret_ty, block, preprocessor_instructions: vec![] }
     )
+}
+
+/// Entry point attributes for a stage string from `#[shader(..)]`: `fragment` -> `@fragment`,
+/// `compute(8, 8)` -> `@compute @workgroup_size(8, 8)`.
+fn stage_attrs(shader_ty: &str) -> Vec<Attr> {
+    match shader_ty.split_once('(') {
+        Some((stage, dims)) => vec![
+            Attr { name: stage.trim().to_string(), content: "".into() },
+            Attr { name: "workgroup_size".into(), content: dims.trim_end_matches(')').trim().to_string() },
+        ],
+        None if shader_ty == "compute" => panic!("Compute shaders need a workgroup size, i.e. `compute(64)`"),
+        None => vec![Attr { name: shader_ty.to_string(), content: "".into() }],
+    }
 }
 
 pub(crate) fn convert_non_global_struct(item: &syn::ItemStruct) -> (String, TranspiledStruct) {
@@ -127,12 +140,6 @@ pub(crate) fn convert_global_struct(item: &syn::ItemStruct, group: u32) -> Vec<(
 }
 
 pub(crate) fn convert_global(item: &syn::Field, group: u32, binding_counter: &AtomicU32) -> (String, ShaderElement) {
-    let binding = binding_counter.fetch_add(1, Ordering::AcqRel);
-    let attrs = vec![
-        Attr { name: "group".to_string(), content: group.to_string() },
-        Attr { name: "binding".to_string(), content: binding.to_string() }
-    ];
-
     let name = item.ident
         .as_ref()
         .expect("Fields must be named for parameters")
@@ -140,17 +147,30 @@ pub(crate) fn convert_global(item: &syn::Field, group: u32, binding_counter: &At
 
     let ty = convert_ty(&item.ty);
 
-    let mut declaration = Vec::new();
-    item.attrs.iter().for_each(|attr| {
-        match &attr.meta {
-            syn::Meta::Path(path) => {
-                let Some(path) = path.get_ident() else { return };
-                declaration.push(path.to_string());
-            },
-            _ => {}
-        }
-    });
-    let declared_as = if declaration.is_empty() { "var".to_string() } else { format!("var<{}>", declaration.join(", ")) };
+    // address space and access mode from the field's attributes
+    let field_attrs = item.attrs.iter()
+        .filter_map(|attr| match &attr.meta {
+            syn::Meta::Path(path) => path.get_ident().map(|a| a.to_string()),
+            _ => None
+        })
+        .collect::<Vec<_>>();
+    let has = |name: &str| field_attrs.iter().any(|a| a == name);
+    let declaration =
+        if has("workgroup") { Some("workgroup") }
+        else if has("uniform") { Some("uniform") }
+        else if has("write") || has("read_write") { Some("storage, read_write") }
+        else if has("read") || has("storage") { Some("storage, read") }
+        else { None };
+    let declared_as = declaration.map(|d| format!("var<{d}>")).unwrap_or("var".to_string());
+
+    // workgroup memory is shared by the workgroup rather than bound, so takes no binding slot
+    let attrs = if has("workgroup") { vec![] } else {
+        let binding = binding_counter.fetch_add(1, Ordering::AcqRel);
+        vec![
+            Attr { name: "group".to_string(), content: group.to_string() },
+            Attr { name: "binding".to_string(), content: binding.to_string() }
+        ]
+    };
 
     (name.clone(), ShaderElement::Global { attrs, declared_as, name, ty })
 }
@@ -210,17 +230,18 @@ pub fn convert_ty(ty: &syn::Type) -> String {
             let segment = type_path.path.segments.last().expect("Unnamed param path");
             let ident = segment.ident.to_string();
 
-            if ident == "BindlessArray" {
+            if ident == "BindlessArray" || ident == "RuntimeArray" {
                 let inner_ty = match &segment.arguments {
                     syn::PathArguments::AngleBracketed(args) => args.args.iter()
                         .find_map(|a| match a {
                             syn::GenericArgument::Type(t) => Some(t),
                             _ => None
                         })
-                        .expect("BindlessArray<T> requires a type argument"),
-                    _ => panic!("BindlessArray<T> requires a type argument")
+                        .unwrap_or_else(|| panic!("{ident}<T> requires a type argument")),
+                    _ => panic!("{ident}<T> requires a type argument")
                 };
-                return format!("binding_array<{}>", convert_ty(inner_ty));
+                let wgsl_ty = if ident == "BindlessArray" { "binding_array" } else { "array" };
+                return format!("{wgsl_ty}<{}>", convert_ty(inner_ty));
             }
 
             translate_ty_name(&ident).to_string()

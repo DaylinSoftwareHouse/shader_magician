@@ -1079,6 +1079,29 @@ impl_from_inner!(DMat3, glam::DMat3);
 impl_from_inner!(DMat4, glam::DMat4);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Bitcasts and synchronization
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// `bitcast<f32>`
+pub fn bitcast_f32(e: u32) -> f32 { f32::from_bits(e) }
+
+/// `bitcast<u32>`
+pub fn bitcast_u32(e: f32) -> u32 { e.to_bits() }
+
+/// `bitcast<i32>`
+pub fn bitcast_i32(e: u32) -> i32 { e as i32 }
+
+/// `workgroupBarrier`, only meaningful on the GPU.
+pub fn workgroup_barrier() {}
+
+/// `storageBarrier`, only meaningful on the GPU.
+pub fn storage_barrier() {}
+
+/// `subgroupAdd`: the sum of `e` over every active invocation in the subgroup, returned to all
+/// of them. On the CPU a "subgroup" is a single invocation. Needs `wgpu::Features::SUBGROUP`.
+pub fn subgroup_add_f32(e: f32) -> f32 { e }
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────────────
 #[cfg(test)]

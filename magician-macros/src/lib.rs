@@ -16,6 +16,12 @@ impl Parse for ShaderArgs {
         let path: LitStr = input.parse()?;
         input.parse::<Token![,]>()?;
         let stage: Ident = input.parse()?;
+        // compute stages carry their workgroup size, `compute(64)` or `compute(8, 8, 1)`
+        if input.peek(syn::token::Paren) {
+            let content;
+            syn::parenthesized!(content in input);
+            content.parse_terminated(syn::LitInt::parse, Token![,])?;
+        }
         Ok(ShaderArgs { path, stage })
     }
 }
@@ -107,7 +113,7 @@ pub fn shader_layout(input: TokenStream) -> TokenStream {
     TokenStream::new()
 }
 
-#[proc_macro_derive(ShaderGroup, attributes(uniform, read, write))]
+#[proc_macro_derive(ShaderGroup, attributes(uniform, storage, read, write, read_write, workgroup))]
 pub fn shader_group(input: TokenStream) -> TokenStream {
     // decode input
     let input = parse_macro_input!(input as DeriveInput);

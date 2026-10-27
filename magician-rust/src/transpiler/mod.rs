@@ -293,6 +293,43 @@ mod tests {
     }
 
     #[test]
+    fn compute_shaders_with_storage_and_workgroup_memory() {
+        let file = syn::parse_file("
+            #[derive(ShaderLayout)]
+            struct Ids { #[builtin = \"workgroup_id\"] wg: UVec3, #[builtin = \"local_invocation_index\"] lid: u32 }
+
+            #[derive(ShaderGroup)]
+            struct Bindings {
+                #[uniform] dims: UVec4,
+                #[read] w: RuntimeArray<u32>,
+                #[write] y: RuntimeArray<f32>,
+                #[workgroup] partial: [f32; 64],
+            }
+
+            fn main(#[group = 0] mut b: Bindings, ids: Ids) {
+                let packed = b.w[ids.wg.x() as usize];
+                b.partial[ids.lid as usize] = bitcast_f32(packed << 16u32);
+                workgroup_barrier();
+                if ids.lid == 0u32 { b.y[ids.wg.x() as usize] = b.partial[0] + bitcast_f32(b.dims.x()); }
+            }
+        ").expect("test shader must parse");
+        let raw = Transpiler::new(file.clone(), "main".into(), "compute(64)".into()).transpile_raw();
+        Transpiler::new(file, "main".into(), "compute(64)".into())
+            .transpile_wgsl()
+            .unwrap_or_else(|err| panic!("invalid WGSL: {err}\n{raw}"));
+        for expected in [
+            "@compute\n@workgroup_size(64)",
+            "@group(0) @binding(1) var<storage, read> w: array<u32>",
+            "@group(0) @binding(2) var<storage, read_write> y: array<f32>",
+            "var<workgroup> partial: array<f32, 64>",
+            "bitcast<f32>(",
+            "workgroupBarrier()",
+        ] {
+            assert!(raw.contains(expected), "missing {expected:?} in\n{raw}");
+        }
+    }
+
+    #[test]
     fn color_swizzles() {
         transpile("fn main() -> Out {
             let c = Vec4::new(1.0, 0.5, 0.25, 1.0);
